@@ -105,38 +105,44 @@ class MainActivity : AppCompatActivity() {
                         SensorManager.getOrientation(rotationMatrix, orientationAngles)
                         // 왼쪽으로 기울이면 Y -55 이하
                         // 오른쪽으로 기울이면 Y 45 이상
-                        // 앞으로 기울이면 X 25 이상
+                        // 앞으로 기울이면 X 35 이상
                         // 뒤로 기울이면 X -35 이하
                         // 왼쪽으로 틀면 Z가 -44 -> -130
 
-                        val azi = Math.toDegrees(orientationAngles[0].toDouble())
-                        val x = Math.toDegrees(orientationAngles[1].toDouble())
-                        val y = Math.toDegrees(orientationAngles[2].toDouble())
+                        val azi = Math.toDegrees(orientationAngles[0].toDouble()) // -Z
+                        val x = Math.toDegrees(orientationAngles[1].toDouble()) // X
+                        val y = Math.toDegrees(orientationAngles[2].toDouble()) // Y
+                        val etDisText = viewBinding.etDistance.text.toString() // 이동 거리
 
-                        // 날고 있으면서 마지막 명령 후 0.2초가 지났다면
-                        if (isFlying && System.currentTimeMillis() > lastSendTime + 200) {
-                            // 앞
-                            if (x >= 25) {
-                                Log.d("move", "${abs((25 - x)).toInt()}")
-                                move(0, abs((25 - x)).toInt())
+                        // 이동거리가 Null이거나 Empty 상태가 아니라면
+                        if(!etDisText.isNullOrEmpty()) {
+                            val moveDistance = etDisText.toInt()
+
+                            // 이동거리가 20 ~ 500 사이일 경우
+                            if (moveDistance in 20..500) {
+                                // 날고 있으면서 마지막 명령 후 일정 시간이 지났다면
+                                if (isFlying && System.currentTimeMillis() > lastSendTime + 420) {
+                                    // 앞
+                                    if (x >= 40) {
+                                        move(0, moveDistance)
+                                    }
+                                    // 뒤
+                                    else if (x < -55) {
+                                        move(1, moveDistance)
+                                    }
+                                    // 왼쪽
+                                    else if (y <= -55) {
+                                        move(2, moveDistance)
+                                    }
+                                    // 오른쪽
+                                    else if (y >= 55) {
+                                        move(3, moveDistance)
+                                    }
+                                    lastSendTime = System.currentTimeMillis()
+                                }
                             }
-                            // 뒤
-                            else if (x <= -35) {
-                                Log.d("move", "${abs((-35 - x)).toInt()}")
-                                move(1, abs((-35 - x)).toInt())
-                            }
-                            // 왼쪽
-                            else if (y <= -55) {
-                                Log.d("move", "${abs((-55 - y)).toInt()}")
-                                move(2, abs((-55 - y)).toInt())
-                            }
-                            // 오른쪽
-                            else if (y >= 45) {
-                                Log.d("move", "${abs((45 - y)).toInt()}")
-                                move(3, abs((45 - y)).toInt())
-                            }
-                            lastSendTime = System.currentTimeMillis()
                         }
+
 
                         viewBinding.tvAzimuth.text = getString(R.string.angle, "Azimuth", (round(azi*100)/100).toString())
                         viewBinding.tvXpos.text = getString(R.string.angle, "X", (round(x*100)/100).toString())
@@ -162,6 +168,10 @@ class MainActivity : AppCompatActivity() {
         // 이/착륙 버튼
         viewBinding.btnTakeoff.setOnClickListener {
             if (!isFlying) {
+                if (viewBinding.etDistance.text.isNullOrEmpty()) {
+                    viewBinding.etDistance.setText("20")
+                }
+
                 viewBinding.btnTakeoff.text = getString(R.string.btn_land)
                 viewBinding.btnEmergency.visibility = View.VISIBLE
                 changeFlyingState(0)
@@ -224,6 +234,7 @@ class MainActivity : AppCompatActivity() {
      * 전진 신호 전송
      */
     private fun move(type: Int, distance: Int) {
+        Log.d("Move", "Type $type / Distance $distance cm")
         var callResponse: Call<BaseResponse>? = null
 
         if (type == 0) {

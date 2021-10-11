@@ -32,10 +32,10 @@
         android:id="@+id/tv_xpos"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="48dp"
+        android:layout_marginTop="24dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/btn_takeoff" />
+        app:layout_constraintTop_toBottomOf="@+id/et_distance" />
 
     <TextView
         android:id="@+id/tv_ypos"
@@ -54,5 +54,20 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/tv_ypos" />
+
+    <EditText
+        android:id="@+id/et_distance"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:ems="10"
+        android:inputType="number"
+        android:hint="@string/et_distance"
+        android:min="20"
+        android:max="500"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.497"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/btn_takeoff" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

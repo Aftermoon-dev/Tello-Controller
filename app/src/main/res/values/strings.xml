@@ -6,6 +6,8 @@
     <string name="btn_takeoff">이륙</string>
     <string name="btn_land">착륙</string>
     <string name="btn_emergency">비상 정지</string>
+    <string name="et_distance">이동 거리 (20cm–500cm)</string>
+    <string name="toast_distance_error">이동 거리를 입력해주세요</string>
     <string name="angle">%1$s : %2$s</string>
 
     <string name="error">에러가 발생했습니다.</string>
