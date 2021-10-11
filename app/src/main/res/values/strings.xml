@@ -2,4 +2,12 @@
     <string name="app_name">Tello Controller</string>
     <string name="warning_title">경고</string>
     <string name="warning_content">드론을 날리실 때는 주변 사물 및 사람을 주의해주시기 바랍니다.\n또한 센서 변화를 통해 작동하기 때문에 원치 않는 움직임이 발생할 수 있으니 특히 더 유의해주세요.</string>
+
+    <string name="btn_takeoff">이륙</string>
+    <string name="btn_land">착륙</string>
+    <string name="btn_emergency">비상 정지</string>
+    <string name="angle">%1$s : %2$s</string>
+
+    <string name="error">에러가 발생했습니다.</string>
+
 </resources>
