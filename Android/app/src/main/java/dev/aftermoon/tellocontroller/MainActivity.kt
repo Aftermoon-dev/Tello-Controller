@@ -128,13 +128,16 @@ class MainActivity : AppCompatActivity() {
                                 var realSubAngle = startAzi - azi
                                 var subAngle = abs(realSubAngle)
 
-                                // 돌 Angle - 180 값이 180보다 크다면 반대로 도는게 더 효율적이므로 방향 변경
+                                // 360 - 회전할 Angle 값이 회전한 Angle보다 작다면 반대가 더 효율적이므로
                                 if (abs(360 - subAngle) < subAngle) {
+                                    // -1로 반대로 돌 수 있도록 해줌
                                     realSubAngle *= -1
+
+                                    // 실제 도는 각도 변경
                                     subAngle = abs(360 - subAngle)
                                 }
 
-                                //30 ~ 180도 이상의 변화일 경우
+                                //30 ~ 330도 이상의 변화일 경우
                                 if (subAngle in 30.0..330.0) {
                                     Log.d("CalAngle", "realSubAngle $realSubAngle subAngle $subAngle")
 
