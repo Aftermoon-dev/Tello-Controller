@@ -49,10 +49,9 @@ class MainActivity : AppCompatActivity() {
 
     /** 상태 관련 변수 **/
     private var isFlying = false
-    private var beforeX: Double = 0.0
-    private var beforeY: Double = 0.0
-    private var beforeAzi: Double = 0.0
+    private var startAzi: Double = Double.MIN_VALUE
     private var lastSendTime: Long = 0L
+    private var lastRotateTime: Long = Long.MIN_VALUE
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -103,54 +102,88 @@ class MainActivity : AppCompatActivity() {
                     val isSuccess = SensorManager.getRotationMatrix(rotationMatrix, null, accelerometerReading, magnetometerReading)
                     if (isSuccess) {
                         SensorManager.getOrientation(rotationMatrix, orientationAngles)
-                        // 왼쪽으로 기울이면 Y -55 이하
-                        // 오른쪽으로 기울이면 Y 45 이상
-                        // 앞으로 기울이면 X 35 이상
-                        // 뒤로 기울이면 X -35 이하
-                        // 왼쪽으로 틀면 Z가 -44 -> -130
 
-                        val azi = Math.toDegrees(orientationAngles[0].toDouble()) // -Z
+                        var azi = Math.toDegrees(orientationAngles[0].toDouble()) // -Z
+
+                        // Azimuth를 0 - 360 범위로 변경
+                        if (azi <= 0) {
+                            azi = (180 + (180 - (azi * -1)))
+                        }
+
                         val x = Math.toDegrees(orientationAngles[1].toDouble()) // X
                         val y = Math.toDegrees(orientationAngles[2].toDouble()) // Y
-                        val etDisText = viewBinding.etDistance.text.toString() // 이동 거리
+                        val etDisText = viewBinding.etDistance.text.toString() // 사용자가 지정한 이동 거리 EditText
 
-                        // 이동거리가 Null이거나 Empty 상태가 아니라면
-                        if(!etDisText.isNullOrEmpty()) {
-                            val moveDistance = etDisText.toInt()
+                        // 날고있으면서 마지막 명령 후 일정 시간이 지났으면
+                        if(isFlying && System.currentTimeMillis() > lastSendTime + 430) {
+                            // Azimuth는 절대적 수치를 나타냄
+                            // 시작 Azimuth를 저장하고 이를 이용해서 상대적 수치를 계산함
+                            if(startAzi == Double.MIN_VALUE) {
+                                startAzi = azi
+                            }
 
-                            // 이동거리가 20 ~ 500 사이일 경우
-                            if (moveDistance in 20..500) {
-                                // 날고 있으면서 마지막 명령 후 일정 시간이 지났다면
-                                if (isFlying && System.currentTimeMillis() > lastSendTime + 420) {
-                                    // 앞
-                                    if (x >= 40) {
-                                        move(0, moveDistance)
+                            // 한 번도 돈 적이 없거나 마지막으로 회전하고 일정 시간이 지났으면
+                            if (lastRotateTime < 0 || System.currentTimeMillis() > lastRotateTime + 3000) {
+                                // 시작 각도와 차이 구함
+                                var realSubAngle = startAzi - azi
+                                var subAngle = abs(realSubAngle)
+
+                                // 돌 Angle - 180 값이 180보다 크다면 반대로 도는게 더 효율적이므로 방향 변경
+                                if (abs(360 - subAngle) < subAngle) {
+                                    realSubAngle *= -1
+                                    subAngle = abs(360 - subAngle)
+                                }
+
+                                //30 ~ 180도 이상의 변화일 경우
+                                if (subAngle in 30.0..330.0) {
+                                    Log.d("CalAngle", "realSubAngle $realSubAngle subAngle $subAngle")
+
+                                    // 값이 -인지 +인지에 따라 방향 결정
+                                    if (realSubAngle < 0) {
+                                        // CW (오른쪽)
+                                        rotate(0, subAngle.toInt())
                                     }
-                                    // 뒤
-                                    else if (x < -55) {
-                                        move(1, moveDistance)
+                                    else {
+                                        // CCW (왼쪽)
+                                        rotate(1, subAngle.toInt())
                                     }
-                                    // 왼쪽
-                                    else if (y <= -55) {
-                                        move(2, moveDistance)
-                                    }
-                                    // 오른쪽
-                                    else if (y >= 55) {
-                                        move(3, moveDistance)
-                                    }
+                                    startAzi = azi // 새 각도로 변했으므로 새 각도를 startAzi로
+                                    lastRotateTime = System.currentTimeMillis()
                                     lastSendTime = System.currentTimeMillis()
                                 }
                             }
+                            else {
+                                // 이동거리 설정이 되어있다면
+                                if (!etDisText.isEmpty()) {
+                                    val moveDistance = etDisText.toInt()
+
+                                    // 이동거리가 20 ~ 500 사이일 경우
+                                    if (moveDistance in 20..500) {
+                                        if (x >= 40) {
+                                            move(0, moveDistance)
+                                        }
+                                        // 뒤
+                                        else if (x < -55) {
+                                            move(1, moveDistance)
+                                        }
+                                        // 왼쪽
+                                        else if (y <= -55) {
+                                            move(2, moveDistance)
+                                        }
+                                        // 오른쪽
+                                        else if (y >= 55) {
+                                            move(3, moveDistance)
+                                        }
+                                    }
+                                }
+                                lastSendTime = System.currentTimeMillis()
+                            }
                         }
 
-
-                        viewBinding.tvAzimuth.text = getString(R.string.angle, "Azimuth", (round(azi*100)/100).toString())
-                        viewBinding.tvXpos.text = getString(R.string.angle, "X", (round(x*100)/100).toString())
-                        viewBinding.tvYpos.text = getString(R.string.angle, "Y", (round(y*100)/100).toString())
-
-                        beforeAzi = azi
-                        beforeX = x
-                        beforeY = y
+                        // TextView에 Azimuth, Pitch, Roll 표시
+                        viewBinding.tvAzimuth.text = getString(R.string.angle, "Azimuth (-z)", (round(azi*100)/100).toString())
+                        viewBinding.tvXpos.text = getString(R.string.angle, "Pitch (x)", (round(x*100)/100).toString())
+                        viewBinding.tvYpos.text = getString(R.string.angle, "Roll (y)", (round(y*100)/100).toString())
                     }
                 }
             }
@@ -167,6 +200,11 @@ class MainActivity : AppCompatActivity() {
     private fun setButtonEvent() {
         // 이/착륙 버튼
         viewBinding.btnTakeoff.setOnClickListener {
+            // Reset Value
+            startAzi = Double.MIN_VALUE
+            lastSendTime = 0L
+            lastRotateTime = Long.MIN_VALUE
+
             if (!isFlying) {
                 if (viewBinding.etDistance.text.isNullOrEmpty()) {
                     viewBinding.etDistance.setText("20")
@@ -187,6 +225,11 @@ class MainActivity : AppCompatActivity() {
 
         // 비상 버튼
         viewBinding.btnEmergency.setOnClickListener {
+            // Reset Value
+            startAzi = Double.MIN_VALUE
+            lastSendTime = 0L
+            lastRotateTime = Long.MIN_VALUE
+
             viewBinding.btnTakeoff.text = getString(R.string.btn_takeoff)
             viewBinding.btnEmergency.visibility = View.GONE
             changeFlyingState(2)
@@ -274,6 +317,7 @@ class MainActivity : AppCompatActivity() {
      * 회전 신호 전송
      */
     private fun rotate(type: Int, angle: Int) {
+        Log.d("Rotate", "Type $type / Angle $angle")
         var callResponse: Call<BaseResponse>? = null
 
         if (type == 0) {
@@ -320,7 +364,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         // Sensor Listener 등록
         sensorManager!!.registerListener(sensorEventListener, accelSensor, SensorManager.SENSOR_DELAY_NORMAL)
-        sensorManager!!.registerListener(sensorEventListener, magneticSensor, SensorManager.SENSOR_DELAY_NORMAL)
+        sensorManager!!.registerListener(sensorEventListener, magneticSensor,  SensorManager.SENSOR_DELAY_NORMAL)
     }
 
     override fun onPause() {

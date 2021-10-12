@@ -4,7 +4,7 @@ from djitellopy import Tello
 from flask import Flask, request, jsonify
 from multiprocessing import Process
 
-def runTello(queue):
+def runTello(queue, errorDict):
     try:
         telloDrone = Tello(host="192.168.10.1")
         telloDrone.connect()
@@ -55,131 +55,199 @@ def runTello(queue):
                     if isFlying:
                         telloDrone.emergency()
     except Exception as e:
+        errorDict['isError'] = True
         print('Error!', e)
 
 
 # Flask 서버
-def runFlask(queue):
+def runFlask(queue, errorDict):
     app = Flask(__name__)
 
     # 이륙
     @app.route('/takeoff')
     def takeoff():
-        queue.append('0;0')
-        return jsonify(
-            code=200,
-            success=True,
-            msg='OK'
-        )
+        if not errorDict['isError']:
+            queue.append('0;0')
+
+            return jsonify(
+                code=200,
+                success=True,
+                msg='OK'
+            )
+        else:
+            return jsonify(
+                code=500,
+                success=False,
+                msg='Drone Connection Error'
+            )
 
     # 착륙
     @app.route('/land')
     def land():
-        queue.append('1;0')
+        if not errorDict['isError']:
+            queue.append('1;0')
 
-        return jsonify(
-            code=200,
-            success=True,
-            msg='OK'
-        )
+            return jsonify(
+                code=200,
+                success=True,
+                msg='OK'
+            )
+        else:
+            return jsonify(
+                code=500,
+                success=False,
+                msg='Drone Connection Error'
+            )
 
     # 전진
     @app.route('/forward')
     def moveForward():
-        # Request Data
-        distance = request.args.get('distance', 20)
-        queue.append('2;{}'.format(int(distance)))
+        if not errorDict['isError']:
+            distance = request.args.get('distance', 20)
+            queue.append('2;{}'.format(int(distance)))
 
-        return jsonify(
-            code=200,
-            success=True,
-            msg='OK'
-        )
+            return jsonify(
+                code=200,
+                success=True,
+                msg='OK'
+            )
+        else:
+            return jsonify(
+                code=500,
+                success=False,
+                msg='Drone Connection Error'
+            )
 
     # 후진
     @app.route('/back')
     def moveBack():
-        distance = request.args.get('distance', 20)
-        queue.append('3;{}'.format(int(distance)))
+        if not errorDict['isError']:
+            distance = request.args.get('distance', 20)
+            queue.append('3;{}'.format(int(distance)))
 
-        return jsonify(
-            code=200,
-            success=True,
-            msg='OK'
-        )
+            return jsonify(
+                code=200,
+                success=True,
+                msg='OK'
+            )
+        else:
+            return jsonify(
+                code=500,
+                success=False,
+                msg='Drone Connection Error'
+            )
 
     # 왼쪽
     @app.route('/left')
     def moveLeft():
-        distance = request.args.get('distance', 20)
-        queue.append('4;{}'.format(int(distance)))
+        if not errorDict['isError']:
+            distance = request.args.get('distance', 20)
+            queue.append('4;{}'.format(int(distance)))
 
-        return jsonify(
-            code=200,
-            success=True,
-            msg='OK'
-        )
+            return jsonify(
+                code=200,
+                success=True,
+                msg='OK'
+            )
+        else:
+            return jsonify(
+                code=500,
+                success=False,
+                msg='Drone Connection Error'
+            )
 
     # 오른쪽
     @app.route('/right')
     def moveRight():
-        distance = request.args.get('distance', 20)
-        queue.append('5;{}'.format(int(distance)))
+        if not errorDict['isError']:
+            distance = request.args.get('distance', 20)
+            queue.append('5;{}'.format(int(distance)))
 
-        return jsonify(
-            code=200,
-            success=True,
-            msg='OK'
-        )
+            return jsonify(
+                code=200,
+                success=True,
+                msg='OK'
+            )
+        else:
+            return jsonify(
+                code=500,
+                success=False,
+                msg='Drone Connection Error'
+            )
 
     # 회전 (CW)
     @app.route('/rotate_cw')
     def rotate_cw():
-        angle = request.args.get('angle', 30)
-        queue.append('6;{}'.format(int(angle)))
-        return jsonify(
-            code=200,
-            success=True,
-            msg='OK'
-        )
+        if not errorDict['isError']:
+            angle = request.args.get('angle', 30)
+            queue.append('6;{}'.format(int(angle)))
+            return jsonify(
+                code=200,
+                success=True,
+                msg='OK'
+            )
+        else:
+            return jsonify(
+                code=500,
+                success=False,
+                msg='Drone Connection Error'
+            )
 
     # 회전 (CCW)
     @app.route('/rotate_ccw')
     def rotate_ccw():
-        angle = request.args.get('angle', 30)
-        queue.append('7;{}'.format(int(angle)))
-        return jsonify(
-            code=200,
-            success=True,
-            msg='OK'
-        )
+        if not errorDict['isError']:
+            angle = request.args.get('angle', 30)
+            queue.append('7;{}'.format(int(angle)))
+            return jsonify(
+                code=200,
+                success=True,
+                msg='OK'
+            )
+        else:
+            return jsonify(
+                code=500,
+                success=False,
+                msg='Drone Connection Error'
+            )
 
     # 비상 정지
     @app.route('/emergency')
     def emergency():
-        queue.append('8;0')
-        return jsonify(
-            code=200,
-            success=True,
-            msg='OK'
-        )
+        if not errorDict['isError']:
+            queue.append('8;0')
+            return jsonify(
+                code=200,
+                success=True,
+                msg='OK'
+            )
+        else:
+            return jsonify(
+                code=500,
+                success=False,
+                msg='Drone Connection Error'
+            )
 
     app.run(host="0.0.0.0", port=8921)
+
 
 if __name__ == '__main__':
     print('Tello Controller Server is Online!')
 
-    # 명령 Queue를 위한 MultiProcessing Manager
+    # MultiProcessor간 변수 공유를 위한 Manager
     manager = multiprocessing.Manager()
 
     # 명령 Queue
     queueList = manager.list()
 
+    # Error Check용 Dict
+    errorDict = manager.dict({'isError': False})
+
     # 드론 Process
-    telloProcess = Process(target=runTello, args=[queueList])
+    telloProcess = Process(target=runTello, args=[queueList, errorDict])
 
     # Flask Process
-    flaskProcess = Process(target=runFlask, args=[queueList])
+    flaskProcess = Process(target=runFlask, args=[queueList, errorDict])
 
     flaskProcess.start()
     telloProcess.start()
