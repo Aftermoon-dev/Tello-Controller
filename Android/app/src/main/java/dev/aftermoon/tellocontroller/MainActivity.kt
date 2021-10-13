@@ -3,29 +3,24 @@ package dev.aftermoon.tellocontroller
 import android.Manifest
 import android.content.Context
 import android.hardware.*
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.view.View
-import android.view.Window
 import android.view.WindowManager
 import android.widget.Toast
-import com.afollestad.materialdialogs.MaterialDialog
+import androidx.appcompat.app.AppCompatActivity
 import com.gun0912.tedpermission.coroutine.TedPermission
 import dev.aftermoon.tellocontroller.databinding.ActivityMainBinding
 import dev.aftermoon.tellocontroller.network.APICall
 import dev.aftermoon.tellocontroller.network.BaseResponse
 import dev.aftermoon.tellocontroller.network.RetrofitClient
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.Main
-import kotlinx.coroutines.launch
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
-import java.sql.Timestamp
 import kotlin.math.abs
-import kotlin.math.atan2
 import kotlin.math.round
 
 class MainActivity : AppCompatActivity() {
@@ -115,72 +110,71 @@ class MainActivity : AppCompatActivity() {
                         val etDisText = viewBinding.etDistance.text.toString() // 사용자가 지정한 이동 거리 EditText
 
                         // 날고있으면서 마지막 명령 후 일정 시간이 지났으면
-                        if(isFlying && System.currentTimeMillis() > lastSendTime + 430) {
-                            // Azimuth는 절대적 수치를 나타냄
-                            // 시작 Azimuth를 저장하고 이를 이용해서 상대적 수치를 계산함
-                            if(startAzi == Double.MIN_VALUE) {
-                                startAzi = azi
-                            }
-
-                            // 한 번도 돈 적이 없거나 마지막으로 회전하고 일정 시간이 지났으면
-                            if (lastRotateTime < 0 || System.currentTimeMillis() > lastRotateTime + 3000) {
-                                // 시작 각도와 차이 구함
-                                var realSubAngle = startAzi - azi
-                                var subAngle = abs(realSubAngle)
-
-                                // 360 - 회전할 Angle 값이 회전한 Angle보다 작다면 반대가 더 효율적이므로
-                                if (abs(360 - subAngle) < subAngle) {
-                                    // -1로 반대로 돌 수 있도록 해줌
-                                    realSubAngle *= -1
-
-                                    // 실제 도는 각도 변경
-                                    subAngle = abs(360 - subAngle)
+                        if(isFlying && System.currentTimeMillis() > lastSendTime + 800) {
+                            // 이동거리 설정이 되어있다면
+                            if (!etDisText.isEmpty()) {
+                                // Azimuth는 절대적 수치를 나타냄
+                                // 시작 Azimuth를 저장하고 이를 이용해서 상대적 수치를 계산함
+                                if(startAzi == Double.MIN_VALUE) {
+                                    startAzi = azi
                                 }
 
-                                //30 ~ 330도 이상의 변화일 경우
-                                if (subAngle in 30.0..330.0) {
-                                    Log.d("CalAngle", "realSubAngle $realSubAngle subAngle $subAngle")
-
-                                    // 값이 -인지 +인지에 따라 방향 결정
-                                    if (realSubAngle < 0) {
-                                        // CW (오른쪽)
-                                        rotate(0, subAngle.toInt())
+                                val moveDistance = etDisText.toInt()
+                                // 이동거리가 20 ~ 500 사이일 경우
+                                if (moveDistance in 20..500) {
+                                    // 앞
+                                    if (x >= 28) {
+                                        move(0, moveDistance)
+                                    }
+                                    // 뒤
+                                    else if (x < -50) {
+                                        move(1, moveDistance)
+                                    }
+                                    // 왼쪽
+                                    else if (y <= -48) {
+                                        move(2, moveDistance)
+                                    }
+                                    // 오른쪽
+                                    else if (y >= 48) {
+                                        move(3, moveDistance)
                                     }
                                     else {
-                                        // CCW (왼쪽)
-                                        rotate(1, subAngle.toInt())
-                                    }
-                                    startAzi = azi // 새 각도로 변했으므로 새 각도를 startAzi로
-                                    lastRotateTime = System.currentTimeMillis()
-                                    lastSendTime = System.currentTimeMillis()
-                                }
-                            }
-                            else {
-                                // 이동거리 설정이 되어있다면
-                                if (!etDisText.isEmpty()) {
-                                    val moveDistance = etDisText.toInt()
+                                        // 한 번도 돈 적이 없거나 마지막으로 회전하고 일정 시간이 지났으면
+                                        if (lastRotateTime < 0 || System.currentTimeMillis() > lastRotateTime + 2000) {
+                                            // 시작 각도와 차이 구함
+                                            var realSubAngle = startAzi - azi
+                                            var subAngle = abs(realSubAngle)
 
-                                    // 이동거리가 20 ~ 500 사이일 경우
-                                    if (moveDistance in 20..500) {
-                                        if (x >= 40) {
-                                            move(0, moveDistance)
-                                        }
-                                        // 뒤
-                                        else if (x < -55) {
-                                            move(1, moveDistance)
-                                        }
-                                        // 왼쪽
-                                        else if (y <= -55) {
-                                            move(2, moveDistance)
-                                        }
-                                        // 오른쪽
-                                        else if (y >= 55) {
-                                            move(3, moveDistance)
+                                            // 360 - 회전할 Angle 값이 회전한 Angle보다 작다면 반대가 더 효율적이므로
+                                            if (abs(360 - subAngle) < subAngle) {
+                                                // -1로 반대로 돌 수 있도록 해줌
+                                                realSubAngle *= -1
+
+                                                // 실제 도는 각도 변경
+                                                subAngle = abs(360 - subAngle)
+                                            }
+
+                                            //30 ~ 330도 이상의 변화일 경우
+                                            if (subAngle in 30.0..330.0) {
+                                                Log.d("CalAngle", "realSubAngle $realSubAngle subAngle $subAngle")
+
+                                                // 값이 -인지 +인지에 따라 방향 결정
+                                                if (realSubAngle < 0) {
+                                                    // CW (오른쪽)
+                                                    rotate(0, subAngle.toInt())
+                                                }
+                                                else {
+                                                    // CCW (왼쪽)
+                                                    rotate(1, subAngle.toInt())
+                                                }
+                                                startAzi = azi // 새 각도로 변했으므로 새 각도를 startAzi로
+                                                lastRotateTime = System.currentTimeMillis()
+                                            }
                                         }
                                     }
                                 }
-                                lastSendTime = System.currentTimeMillis()
                             }
+                            lastSendTime = System.currentTimeMillis()
                         }
 
                         // TextView에 Azimuth, Pitch, Roll 표시
