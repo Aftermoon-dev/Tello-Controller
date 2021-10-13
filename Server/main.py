@@ -3,6 +3,7 @@ import multiprocessing
 from djitellopy import Tello
 from flask import Flask, request, jsonify
 from multiprocessing import Process
+import time
 
 def runTello(queue, errorDict):
     try:
@@ -54,6 +55,9 @@ def runTello(queue, errorDict):
                 elif cmd[0] == 8:
                     if isFlying:
                         telloDrone.emergency()
+                        queue.clear()
+            time.sleep(200)
+
     except Exception as e:
         errorDict['isError'] = True
         print('Error!', e)
