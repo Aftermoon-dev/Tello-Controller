@@ -40,6 +40,20 @@ interface APICall {
         @Query("angle") angle: Int
     ): Call<BaseResponse>
 
+    @GET("up")
+    fun up(
+        @Query("distance") distance: Int
+    ): Call<BaseResponse>
+
+    @GET("down")
+    fun down(
+        @Query("distance") distance: Int
+    ): Call<BaseResponse>
+
+
+    @GET("stop")
+    fun stop(): Call<BaseResponse>
+
     @GET("emergency")
     fun emergency(): Call<BaseResponse>
 }

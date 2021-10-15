@@ -3,7 +3,6 @@ import multiprocessing
 from djitellopy import Tello
 from flask import Flask, request, jsonify
 from multiprocessing import Process
-import time
 
 def runTello(queue, errorDict):
     try:
@@ -23,6 +22,18 @@ def runTello(queue, errorDict):
         isFlying = False
         while True:
             if queue:
+                # 비상 정지 최우선
+                if "11;0" in queue:
+                    telloDrone.emergency()
+                    queue.clear()
+                    continue
+                # 정지는 그 이후
+                elif "10;0" in queue:
+                    telloDrone.stop()
+                    queue.clear()
+                    continue
+
+                # 일반 명령어 파싱
                 cmd = list(map(int, queue.pop(0).split(';')))
                 print(cmd)
 
@@ -54,9 +65,10 @@ def runTello(queue, errorDict):
                         telloDrone.rotate_counter_clockwise(cmd[1])
                 elif cmd[0] == 8:
                     if isFlying:
-                        telloDrone.emergency()
-                        queue.clear()
-            time.sleep(200)
+                        telloDrone.move_up(cmd[1])
+                elif cmd[0] == 9:
+                    if isFlying:
+                        telloDrone.move_down(cmd[1])
 
     except Exception as e:
         errorDict['isError'] = True
@@ -215,11 +227,65 @@ def runFlask(queue, errorDict):
                 msg='Drone Connection Error'
             )
 
+    # 상승
+    @app.route('/up')
+    def up():
+        if not errorDict['isError']:
+            distance = request.args.get('distance', 30)
+            queue.append('8;{}'.format(int(distance)))
+            return jsonify(
+                code=200,
+                success=True,
+                msg='OK'
+            )
+        else:
+            return jsonify(
+                code=500,
+                success=False,
+                msg='Drone Connection Error'
+            )
+
+
+    # 하강
+    @app.route('/down')
+    def down():
+        if not errorDict['isError']:
+            distance = request.args.get('distance', 30)
+            queue.append('9;{}'.format(int(distance)))
+            return jsonify(
+                code=200,
+                success=True,
+                msg='OK'
+            )
+        else:
+            return jsonify(
+                code=500,
+                success=False,
+                msg='Drone Connection Error'
+            )
+
+    # 정지
+    @app.route('/stop')
+    def stop():
+        if not errorDict['isError']:
+            queue.append('10;0')
+            return jsonify(
+                code=200,
+                success=True,
+                msg='OK'
+            )
+        else:
+            return jsonify(
+                code=500,
+                success=False,
+                msg='Drone Connection Error'
+            )
+
     # 비상 정지
     @app.route('/emergency')
     def emergency():
         if not errorDict['isError']:
-            queue.append('8;0')
+            queue.append('11;0')
             return jsonify(
                 code=200,
                 success=True,
@@ -248,10 +314,10 @@ if __name__ == '__main__':
     errorDict = manager.dict({'isError': False})
 
     # 드론 Process
-    telloProcess = Process(target=runTello, args=[queueList, errorDict])
+    telloProcess = Process(target=runTello, args=(queueList, errorDict))
 
     # Flask Process
-    flaskProcess = Process(target=runFlask, args=[queueList, errorDict])
+    flaskProcess = Process(target=runFlask, args=(queueList, errorDict))
 
     flaskProcess.start()
     telloProcess.start()

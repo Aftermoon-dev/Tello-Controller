@@ -47,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     private var startAzi: Double = Double.MIN_VALUE
     private var lastSendTime: Long = 0L
     private var lastRotateTime: Long = Long.MIN_VALUE
+    private var lastStop: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,7 +71,7 @@ class MainActivity : AppCompatActivity() {
      */
     private fun initVariable() {
         // Get Retrofit Client
-        retrofitClient = RetrofitClient.getRetrofitClient("http://192.168.0.2:8921")
+        retrofitClient = RetrofitClient.getRetrofitClient("http://192.168.0.11:8921")
         if(retrofitClient == null) {
             Toast.makeText(this, getString(R.string.error), Toast.LENGTH_SHORT).show()
             finish()
@@ -138,38 +139,51 @@ class MainActivity : AppCompatActivity() {
                                     else if (y >= 48) {
                                         move(3, moveDistance)
                                     }
+                                    // 한 번도 돈 적이 없거나 마지막으로 회전하고 일정 시간이 지났으면
+                                    else if (lastRotateTime < 0 || System.currentTimeMillis() > lastRotateTime + 2000) {
+                                        // 시작 각도와 차이 구함
+                                        var realSubAngle = startAzi - azi
+                                        var subAngle = abs(realSubAngle)
+
+                                        // 360 - 회전할 Angle 값이 회전한 Angle보다 작다면 반대가 더 효율적이므로
+                                        if (abs(360 - subAngle) < subAngle) {
+                                            // -1로 반대로 돌 수 있도록 해줌
+                                            realSubAngle *= -1
+
+                                            // 실제 도는 각도 변경
+                                            subAngle = abs(360 - subAngle)
+                                        }
+
+                                        //30 ~ 330도 이상의 변화일 경우
+                                        if (subAngle in 30.0..330.0) {
+                                            Log.d("CalAngle", "realSubAngle $realSubAngle subAngle $subAngle")
+
+                                            // 값이 -인지 +인지에 따라 방향 결정
+                                            if (realSubAngle < 0) {
+                                                // CW (오른쪽)
+                                                rotate(0, subAngle.toInt())
+                                            }
+                                            else {
+                                                // CCW (왼쪽)
+                                                rotate(1, subAngle.toInt())
+                                            }
+                                            startAzi = azi // 새 각도로 변했으므로 새 각도를 startAzi로
+                                            lastRotateTime = System.currentTimeMillis()
+                                        }
+                                        // 변화가 회전할 정도가 아니라면
+                                        else {
+                                            // 마지막이 정지 신호가 아니였다면
+                                            if(!lastStop) {
+                                                // 정지
+                                                changeFlyingState(2)
+                                            }
+                                        }
+                                    }
                                     else {
-                                        // 한 번도 돈 적이 없거나 마지막으로 회전하고 일정 시간이 지났으면
-                                        if (lastRotateTime < 0 || System.currentTimeMillis() > lastRotateTime + 2000) {
-                                            // 시작 각도와 차이 구함
-                                            var realSubAngle = startAzi - azi
-                                            var subAngle = abs(realSubAngle)
-
-                                            // 360 - 회전할 Angle 값이 회전한 Angle보다 작다면 반대가 더 효율적이므로
-                                            if (abs(360 - subAngle) < subAngle) {
-                                                // -1로 반대로 돌 수 있도록 해줌
-                                                realSubAngle *= -1
-
-                                                // 실제 도는 각도 변경
-                                                subAngle = abs(360 - subAngle)
-                                            }
-
-                                            //30 ~ 330도 이상의 변화일 경우
-                                            if (subAngle in 30.0..330.0) {
-                                                Log.d("CalAngle", "realSubAngle $realSubAngle subAngle $subAngle")
-
-                                                // 값이 -인지 +인지에 따라 방향 결정
-                                                if (realSubAngle < 0) {
-                                                    // CW (오른쪽)
-                                                    rotate(0, subAngle.toInt())
-                                                }
-                                                else {
-                                                    // CCW (왼쪽)
-                                                    rotate(1, subAngle.toInt())
-                                                }
-                                                startAzi = azi // 새 각도로 변했으므로 새 각도를 startAzi로
-                                                lastRotateTime = System.currentTimeMillis()
-                                            }
+                                        // 마지막이 정지 신호가 아니였다면
+                                        if(!lastStop) {
+                                            // 정지
+                                            changeFlyingState(2)
                                         }
                                     }
                                 }
@@ -201,10 +215,11 @@ class MainActivity : AppCompatActivity() {
             startAzi = Double.MIN_VALUE
             lastSendTime = 0L
             lastRotateTime = Long.MIN_VALUE
+            lastStop = false
 
             if (!isFlying) {
                 if (viewBinding.etDistance.text.isNullOrEmpty()) {
-                    viewBinding.etDistance.setText("20")
+                    viewBinding.etDistance.setText("50")
                 }
 
                 viewBinding.btnTakeoff.text = getString(R.string.btn_land)
@@ -229,13 +244,13 @@ class MainActivity : AppCompatActivity() {
 
             viewBinding.btnTakeoff.text = getString(R.string.btn_takeoff)
             viewBinding.btnEmergency.visibility = View.GONE
-            changeFlyingState(2)
+            changeFlyingState(3)
             isFlying = false
         }
     }
 
     /**
-     * 이륙/착륙 신호 전송
+     * 비행 상태 변화 신호 전송
      */
     private fun changeFlyingState(type: Int) {
         var callResponse: Call<BaseResponse>? = null
@@ -247,6 +262,10 @@ class MainActivity : AppCompatActivity() {
             callResponse = apiCall!!.land()
         }
         else if (type == 2) {
+            callResponse = apiCall!!.stop()
+            lastStop = true
+        }
+        else if (type == 3) {
             callResponse = apiCall!!.emergency()
         }
 
@@ -271,12 +290,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * 전진 신호 전송
+     * 이동 신호 전송
      */
     private fun move(type: Int, distance: Int) {
         Log.d("Move", "Type $type / Distance $distance cm")
         var callResponse: Call<BaseResponse>? = null
 
+        lastStop = false
         if (type == 0) {
             callResponse = apiCall!!.forward(distance)
         }
@@ -317,6 +337,7 @@ class MainActivity : AppCompatActivity() {
         Log.d("Rotate", "Type $type / Angle $angle")
         var callResponse: Call<BaseResponse>? = null
 
+        lastStop = false
         if (type == 0) {
             callResponse = apiCall!!.rotate_cw(angle)
         }
