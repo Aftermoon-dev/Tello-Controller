@@ -25,12 +25,12 @@ def runTello(queue, errorDict):
                 # 비상 정지 최우선
                 if "11;0" in queue:
                     telloDrone.emergency()
-                    queue.clear()
+                    queue[:] = []
                     continue
                 # 정지는 그 이후
                 elif "10;0" in queue:
-                    telloDrone.stop()
-                    queue.clear()
+                    telloDrone.send_control_command("stop", 500)
+                    queue[:] = []
                     continue
 
                 # 일반 명령어 파싱
