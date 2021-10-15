@@ -163,11 +163,11 @@ class MainActivity : AppCompatActivity() {
                                             // 값이 -인지 +인지에 따라 방향 결정
                                             if (realSubAngle < 0) {
                                                 // CW (오른쪽)
-                                                rotate(0, subAngle.toInt() + 16)
+                                                rotate(0, subAngle.toInt() + 15)
                                             }
                                             else {
                                                 // CCW (왼쪽)
-                                                rotate(1, subAngle.toInt() + 16)
+                                                rotate(1, subAngle.toInt() + 15)
                                             }
                                             startAzi = azi // 새 각도로 변했으므로 새 각도를 startAzi로
                                             lastRotateTime = System.currentTimeMillis()
