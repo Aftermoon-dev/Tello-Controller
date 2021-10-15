@@ -50,6 +50,10 @@ interface APICall {
         @Query("distance") distance: Int
     ): Call<BaseResponse>
 
+    @GET("speed")
+    fun speed(
+        @Query("speed") speed: Int
+    ): Call<BaseResponse>
 
     @GET("stop")
     fun stop(): Call<BaseResponse>

@@ -6,7 +6,12 @@
     <string name="btn_takeoff">이륙</string>
     <string name="btn_land">착륙</string>
     <string name="btn_emergency">비상 정지</string>
+    <string name="btn_up">상승</string>
+    <string name="btn_down">하강</string>
+    <string name="btn_stop">정지</string>
+
     <string name="et_distance">이동 거리 (20cm–500cm)</string>
+    <string name="et_speed">이동 속도 (10cm-100cm)</string>
     <string name="toast_distance_error">이동 거리를 입력해주세요</string>
     <string name="angle">%1$s : %2$s</string>
 

@@ -47,7 +47,6 @@ class MainActivity : AppCompatActivity() {
     private var startAzi: Double = Double.MIN_VALUE
     private var lastSendTime: Long = 0L
     private var lastRotateTime: Long = Long.MIN_VALUE
-    private var lastStop: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -170,21 +169,6 @@ class MainActivity : AppCompatActivity() {
                                             startAzi = azi // 새 각도로 변했으므로 새 각도를 startAzi로
                                             lastRotateTime = System.currentTimeMillis()
                                         }
-                                        // 변화가 회전할 정도가 아니라면
-                                        else {
-                                            // 마지막이 정지 신호가 아니였다면
-                                            if(!lastStop) {
-                                                // 정지
-                                                changeFlyingState(2)
-                                            }
-                                        }
-                                    }
-                                    else {
-                                        // 마지막이 정지 신호가 아니였다면
-                                        if(!lastStop) {
-                                            // 정지
-                                            changeFlyingState(2)
-                                        }
                                     }
                                 }
                             }
@@ -215,11 +199,14 @@ class MainActivity : AppCompatActivity() {
             startAzi = Double.MIN_VALUE
             lastSendTime = 0L
             lastRotateTime = Long.MIN_VALUE
-            lastStop = false
 
             if (!isFlying) {
                 if (viewBinding.etDistance.text.isNullOrEmpty()) {
                     viewBinding.etDistance.setText("50")
+                }
+
+                if (viewBinding.etSpeed.text.isNullOrEmpty()) {
+                    viewBinding.etSpeed.setText("20")
                 }
 
                 viewBinding.btnTakeoff.text = getString(R.string.btn_land)
@@ -231,6 +218,7 @@ class MainActivity : AppCompatActivity() {
                 viewBinding.btnTakeoff.text = getString(R.string.btn_takeoff)
                 viewBinding.btnEmergency.visibility = View.GONE
                 changeFlyingState(1)
+                setSpeed(viewBinding.etSpeed.text.toString().toInt())
                 isFlying = false
             }
         }
@@ -247,12 +235,29 @@ class MainActivity : AppCompatActivity() {
             changeFlyingState(3)
             isFlying = false
         }
+
+        // 상승
+        viewBinding.btnUp.setOnClickListener {
+            move(4, 30)
+        }
+
+        // 하강
+        viewBinding.btnDown.setOnClickListener {
+            move(5, 30)
+        }
+
+        // 정지
+        viewBinding.btnStop.setOnClickListener {
+            changeFlyingState(2)
+        }
     }
 
     /**
      * 비행 상태 변화 신호 전송
      */
     private fun changeFlyingState(type: Int) {
+        Log.d("changeFlyingState", "Type $type")
+
         var callResponse: Call<BaseResponse>? = null
 
         if (type == 0) {
@@ -263,7 +268,6 @@ class MainActivity : AppCompatActivity() {
         }
         else if (type == 2) {
             callResponse = apiCall!!.stop()
-            lastStop = true
         }
         else if (type == 3) {
             callResponse = apiCall!!.emergency()
@@ -296,7 +300,6 @@ class MainActivity : AppCompatActivity() {
         Log.d("Move", "Type $type / Distance $distance cm")
         var callResponse: Call<BaseResponse>? = null
 
-        lastStop = false
         if (type == 0) {
             callResponse = apiCall!!.forward(distance)
         }
@@ -308,6 +311,12 @@ class MainActivity : AppCompatActivity() {
         }
         else if (type == 3) {
             callResponse = apiCall!!.right(distance)
+        }
+        else if (type == 4) {
+            callResponse = apiCall!!.up(distance)
+        }
+        else if (type == 5) {
+            callResponse = apiCall!!.down(distance)
         }
 
         callResponse!!.enqueue(object : Callback<BaseResponse> {
@@ -337,13 +346,38 @@ class MainActivity : AppCompatActivity() {
         Log.d("Rotate", "Type $type / Angle $angle")
         var callResponse: Call<BaseResponse>? = null
 
-        lastStop = false
         if (type == 0) {
             callResponse = apiCall!!.rotate_cw(angle)
         }
         else if (type == 1) {
             callResponse = apiCall!!.rotate_ccw(angle)
         }
+
+        callResponse!!.enqueue(object : Callback<BaseResponse> {
+            override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {
+                val body = response.body()
+                if(body != null) {
+                    if(body.code != 200) {
+                        Log.i("MainActivity", "${body.code} ${body.message}")
+                    }
+                }
+                else {
+                    Log.i("MainActivity", "Body NULL")
+                }
+            }
+
+            override fun onFailure(call: Call<BaseResponse>, t: Throwable) {
+                Log.e("MainActivity", "Error!", t)
+                Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+
+    /**
+     * 속도 설정
+     */
+    private fun setSpeed(speed: Int) {
+        var callResponse: Call<BaseResponse> = apiCall!!.speed(speed)
 
         callResponse!!.enqueue(object : Callback<BaseResponse> {
             override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {
