@@ -4,6 +4,7 @@
     <string name="btn_takeoff">이륙</string>
     <string name="btn_land">착륙</string>
     <string name="btn_emergency">비상 정지</string>
+    <string name="btn_speedsave">속도 수정</string>
     <string name="btn_up">상승</string>
     <string name="btn_down">하강</string>
     <string name="btn_stop">정지</string>
