@@ -25,14 +25,15 @@ def runTello(queue, errorDict):
         while True:
             if queue:
                 # 비상 정지 최우선
-                if "11;0" in queue:
+                if "12;0" in queue:
                     telloDrone.emergency()
                     queue[:] = []
                     continue
-                # 정지가 큐에 있으면 그 다음으로 우선
-                if "10;0" in queue:
+                # 정지는 그 다음 우선
+                if "11;0" in queue:
                     telloDrone.send_control_command("stop")
                     queue[:] = []
+                    continue
 
                 # 일반 명령어 파싱
                 cmd = list(map(int, queue.pop(0).split(';')))
@@ -70,6 +71,9 @@ def runTello(queue, errorDict):
                 elif cmd[0] == 9:
                     if isFlying:
                         telloDrone.move_down(cmd[1])
+                elif cmd[0] == 10:
+                    if isFlying:
+                        telloDrone.set_speed(cmd[1])
 
     except Exception as e:
         errorDict['isError'] = True
@@ -265,11 +269,29 @@ def runFlask(queue, errorDict):
                 msg='Drone Connection Error'
             )
 
+    # 속도
+    @app.route('/speed')
+    def speed():
+        if not errorDict['isError']:
+            speed = request.args.get('speed', 30)
+            queue.append('10;{}'.format(int(speed)))
+            return jsonify(
+                code=200,
+                success=True,
+                msg='OK'
+            )
+        else:
+            return jsonify(
+                code=500,
+                success=False,
+                msg='Drone Connection Error'
+            )
+
     # 정지
     @app.route('/stop')
     def stop():
         if not errorDict['isError']:
-            queue.append('10;0')
+            queue.append('11;0')
             return jsonify(
                 code=200,
                 success=True,
@@ -286,7 +308,7 @@ def runFlask(queue, errorDict):
     @app.route('/emergency')
     def emergency():
         if not errorDict['isError']:
-            queue.append('11;0')
+            queue.append('12;0')
             return jsonify(
                 code=200,
                 success=True,
