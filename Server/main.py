@@ -9,6 +9,8 @@ def runTello(queue, errorDict):
         telloDrone = Tello(host="192.168.10.1")
         telloDrone.connect()
 
+        telloDrone.RESPONSE_TIMEOUT = 3
+        telloDrone.RETRY_COUNT = 2
         telloDrone.for_back_velocity = 0
         telloDrone.left_right_velocity = 0
         telloDrone.up_down_velocity = 0
@@ -27,11 +29,10 @@ def runTello(queue, errorDict):
                     telloDrone.emergency()
                     queue[:] = []
                     continue
-                # 정지가 큐에 있고 index가 1보다 큰 경우
-                if "10;0" in queue and queue.index("10;0") > 1:
-                    # 다음 명령으로 처리
-                    del queue[queue.index("10;0")]
-                    queue.insert(1, "10;0")
+                # 정지가 큐에 있으면 그 다음으로 우선
+                if "10;0" in queue:
+                    telloDrone.send_control_command("stop")
+                    queue[:] = []
 
                 # 일반 명령어 파싱
                 cmd = list(map(int, queue.pop(0).split(';')))
@@ -69,9 +70,6 @@ def runTello(queue, errorDict):
                 elif cmd[0] == 9:
                     if isFlying:
                         telloDrone.move_down(cmd[1])
-                elif cmd[0] == 10:
-                    if isFlying:
-                        telloDrone.send_control_command("stop", 500)
 
     except Exception as e:
         errorDict['isError'] = True
