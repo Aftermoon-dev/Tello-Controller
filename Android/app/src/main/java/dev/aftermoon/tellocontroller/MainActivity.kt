@@ -4,11 +4,14 @@ import android.Manifest
 import android.content.Context
 import android.hardware.*
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.widget.addTextChangedListener
 import com.gun0912.tedpermission.coroutine.TedPermission
 import dev.aftermoon.tellocontroller.databinding.ActivityMainBinding
 import dev.aftermoon.tellocontroller.network.APICall
@@ -238,18 +241,31 @@ class MainActivity : AppCompatActivity() {
 
         // 상승
         viewBinding.btnUp.setOnClickListener {
-            move(4, 30)
+            if(isFlying) move(4, 30)
         }
 
         // 하강
         viewBinding.btnDown.setOnClickListener {
-            move(5, 30)
+            if(isFlying) move(5, 30)
         }
 
         // 정지
         viewBinding.btnStop.setOnClickListener {
-            changeFlyingState(2)
+            if(isFlying) changeFlyingState(2)
         }
+
+        viewBinding.etSpeed.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                if (s.toString().isNotEmpty()) {
+                    val value = s.toString().toInt()
+                    if (value in 10..100) setSpeed(value)
+                }
+            }
+
+            override fun afterTextChanged(s: Editable?) {}
+        })
     }
 
     /**
