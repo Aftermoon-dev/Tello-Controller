@@ -163,11 +163,11 @@ class MainActivity : AppCompatActivity() {
                                             // 값이 -인지 +인지에 따라 방향 결정
                                             if (realSubAngle < 0) {
                                                 // CW (오른쪽)
-                                                rotate(0, subAngle.toInt())
+                                                rotate(0, subAngle.toInt() + 15)
                                             }
                                             else {
                                                 // CCW (왼쪽)
-                                                rotate(1, subAngle.toInt())
+                                                rotate(1, subAngle.toInt() + 15)
                                             }
                                             startAzi = azi // 새 각도로 변했으므로 새 각도를 startAzi로
                                             lastRotateTime = System.currentTimeMillis()
@@ -205,11 +205,11 @@ class MainActivity : AppCompatActivity() {
 
             if (!isFlying) {
                 if (viewBinding.etDistance.text.isNullOrEmpty()) {
-                    viewBinding.etDistance.setText("50")
+                    viewBinding.etDistance.setText("60")
                 }
 
                 if (viewBinding.etSpeed.text.isNullOrEmpty()) {
-                    viewBinding.etSpeed.setText("20")
+                    viewBinding.etSpeed.setText("30")
                 }
 
                 viewBinding.btnTakeoff.text = getString(R.string.btn_land)
@@ -221,7 +221,6 @@ class MainActivity : AppCompatActivity() {
                 viewBinding.btnTakeoff.text = getString(R.string.btn_takeoff)
                 viewBinding.btnEmergency.visibility = View.GONE
                 changeFlyingState(1)
-                setSpeed(viewBinding.etSpeed.text.toString().toInt())
                 isFlying = false
             }
         }
@@ -254,18 +253,12 @@ class MainActivity : AppCompatActivity() {
             if(isFlying) changeFlyingState(2)
         }
 
-        viewBinding.etSpeed.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                if (s.toString().isNotEmpty()) {
-                    val value = s.toString().toInt()
-                    if (value in 10..100) setSpeed(value)
-                }
+        viewBinding.btnSpeedsave.setOnClickListener {
+            if (isFlying && viewBinding.etSpeed.text.toString().isNotEmpty()) {
+                val value = viewBinding.etSpeed.text.toString().toInt()
+                if (value in 10..100) setSpeed(value)
             }
-
-            override fun afterTextChanged(s: Editable?) {}
-        })
+        }
     }
 
     /**
