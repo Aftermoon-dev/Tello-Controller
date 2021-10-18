@@ -9,6 +9,7 @@ def runTello(queue, errorDict):
         telloDrone = Tello(host="192.168.10.1")
         telloDrone.connect()
 
+        telloDrone.TAKEOFF_TIMEOUT = 10
         telloDrone.RESPONSE_TIMEOUT = 3
         telloDrone.RETRY_COUNT = 2
         telloDrone.for_back_velocity = 0
