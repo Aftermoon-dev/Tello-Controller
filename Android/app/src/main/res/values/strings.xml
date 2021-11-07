@@ -5,9 +5,11 @@
     <string name="btn_land">착륙</string>
     <string name="btn_emergency">비상 정지</string>
     <string name="btn_speedsave">속도 수정</string>
-    <string name="btn_up">상승</string>
-    <string name="btn_down">하강</string>
-    <string name="btn_stop">정지</string>
+    <string name="btn_up">상승/하강 모드</string>
+    <string name="btn_move">전진 모드</string>
+    <string name="btn_stop">정지(촬영) 모드</string>
+    <string name="btn_stop_unlock">정지(촬영) 모드 해제</string>
+    <string name="btn_capture">촬영하기</string>
 
     <string name="et_distance">이동 거리 (20cm–500cm)</string>
     <string name="et_speed">이동 속도 (10cm-100cm)</string>

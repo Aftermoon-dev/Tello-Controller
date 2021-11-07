@@ -2,8 +2,11 @@ package dev.aftermoon.tellocontroller
 
 import android.Manifest
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.hardware.*
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
@@ -19,6 +22,7 @@ import dev.aftermoon.tellocontroller.network.BaseResponse
 import dev.aftermoon.tellocontroller.network.RetrofitClient
 import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.Main
+import okhttp3.ResponseBody
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -50,6 +54,11 @@ class MainActivity : AppCompatActivity() {
     private var startAzi: Double = Double.MIN_VALUE
     private var lastSendTime: Long = 0L
     private var lastRotateTime: Long = Long.MIN_VALUE
+    private var isUpDownMode = false
+    private var isCaptureMode = false
+
+    /** Loading **/
+    private var loadingDialog: LoadingDialog? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,6 +81,9 @@ class MainActivity : AppCompatActivity() {
      * 초기 변수 설정
      */
     private fun initVariable() {
+        // LoadingDialog
+        loadingDialog = LoadingDialog(this)
+
         // Get Retrofit Client
         retrofitClient = RetrofitClient.getRetrofitClient("http://192.168.0.11:8921")
         if(retrofitClient == null) {
@@ -98,7 +110,7 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     val isSuccess = SensorManager.getRotationMatrix(rotationMatrix, null, accelerometerReading, magnetometerReading)
-                    if (isSuccess) {
+                    if (isSuccess && !isCaptureMode) {
                         SensorManager.getOrientation(rotationMatrix, orientationAngles)
 
                         var azi = Math.toDegrees(orientationAngles[0].toDouble()) // -Z
@@ -125,53 +137,69 @@ class MainActivity : AppCompatActivity() {
                                 val moveDistance = etDisText.toInt()
                                 // 이동거리가 20 ~ 500 사이일 경우
                                 if (moveDistance in 20..500) {
-                                    // 앞
-                                    if (x >= 28) {
-                                        move(0, moveDistance)
-                                    }
-                                    // 뒤
-                                    else if (x < -50) {
-                                        move(1, moveDistance)
-                                    }
-                                    // 왼쪽
-                                    else if (y <= -48) {
-                                        move(2, moveDistance)
-                                    }
-                                    // 오른쪽
-                                    else if (y >= 48) {
-                                        move(3, moveDistance)
-                                    }
-                                    // 한 번도 돈 적이 없거나 마지막으로 회전하고 일정 시간이 지났으면
-                                    else if (lastRotateTime < 0 || System.currentTimeMillis() > lastRotateTime + 2000) {
-                                        // 시작 각도와 차이 구함
-                                        var realSubAngle = startAzi - azi
-                                        var subAngle = abs(realSubAngle)
+                                    // 일반 전진 모드일 경우
+                                    if(!isUpDownMode) {
+                                        // 앞
+                                        if (x >= 28) {
+                                            move(0, moveDistance)
+                                        }
+                                        // 뒤
+                                        else if (x < -50) {
+                                            move(1, moveDistance)
+                                        }
+                                        // 왼쪽
+                                        else if (y <= -48) {
+                                            move(2, moveDistance)
+                                        }
+                                        // 오른쪽
+                                        else if (y >= 48) {
+                                            move(3, moveDistance)
+                                        }
+                                        // 한 번도 돈 적이 없거나 마지막으로 회전하고 일정 시간이 지났으면
+                                        else if (lastRotateTime < 0 || System.currentTimeMillis() > lastRotateTime + 2000) {
+                                            // 시작 각도와 차이 구함
+                                            var realSubAngle = startAzi - azi
+                                            var subAngle = abs(realSubAngle)
 
-                                        // 360 - 회전할 Angle 값이 회전한 Angle보다 작다면 반대가 더 효율적이므로
-                                        if (abs(360 - subAngle) < subAngle) {
-                                            // -1로 반대로 돌 수 있도록 해줌
-                                            realSubAngle *= -1
+                                            // 360 - 회전할 Angle 값이 회전한 Angle보다 작다면 반대가 더 효율적이므로
+                                            if (abs(360 - subAngle) < subAngle) {
+                                                // -1로 반대로 돌 수 있도록 해줌
+                                                realSubAngle *= -1
 
-                                            // 실제 도는 각도 변경
-                                            subAngle = abs(360 - subAngle)
+                                                // 실제 도는 각도 변경
+                                                subAngle = abs(360 - subAngle)
+                                            }
+
+                                            //30 ~ 330도 이상의 변화일 경우
+                                            if (subAngle in 30.0..330.0) {
+                                                Log.d(
+                                                    "CalAngle",
+                                                    "realSubAngle $realSubAngle subAngle $subAngle"
+                                                )
+
+                                                // 값이 -인지 +인지에 따라 방향 결정
+                                                if (realSubAngle < 0) {
+                                                    // CW (오른쪽)
+                                                    rotate(0, subAngle.toInt() + 15)
+                                                } else {
+                                                    // CCW (왼쪽)
+                                                    rotate(1, subAngle.toInt() + 15)
+                                                }
+                                                startAzi = azi // 새 각도로 변했으므로 새 각도를 startAzi로
+                                                lastRotateTime = System.currentTimeMillis()
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        // 앞으로 기울이면 위로
+                                        if (x >= 28) {
+                                            move(4, moveDistance)
+                                        }
+                                        // 뒤로 기울이면 아래로
+                                        else if (x < -50) {
+                                            move(5, moveDistance)
                                         }
 
-                                        //30 ~ 330도 이상의 변화일 경우
-                                        if (subAngle in 30.0..330.0) {
-                                            Log.d("CalAngle", "realSubAngle $realSubAngle subAngle $subAngle")
-
-                                            // 값이 -인지 +인지에 따라 방향 결정
-                                            if (realSubAngle < 0) {
-                                                // CW (오른쪽)
-                                                rotate(0, subAngle.toInt() + 15)
-                                            }
-                                            else {
-                                                // CCW (왼쪽)
-                                                rotate(1, subAngle.toInt() + 15)
-                                            }
-                                            startAzi = azi // 새 각도로 변했으므로 새 각도를 startAzi로
-                                            lastRotateTime = System.currentTimeMillis()
-                                        }
                                     }
                                 }
                             }
@@ -238,21 +266,41 @@ class MainActivity : AppCompatActivity() {
             isFlying = false
         }
 
-        // 상승
-        viewBinding.btnUp.setOnClickListener {
-            if(isFlying) move(4, 30)
+        // 모드 변경 버튼
+        viewBinding.btnMode.setOnClickListener {
+            if(isUpDownMode) {
+                viewBinding.btnMode.text = getString(R.string.btn_move)
+                isUpDownMode = false
+            }
+            else {
+                viewBinding.btnMode.text = getString(R.string.btn_up)
+                isUpDownMode = true
+            }
         }
 
-        // 하강
-        viewBinding.btnDown.setOnClickListener {
-            if(isFlying) move(5, 30)
+        // 사진 촬영 모드 버튼
+        viewBinding.btnStopmode.setOnClickListener {
+            if(isCaptureMode) {
+                viewBinding.btnCapture.visibility = View.GONE
+                viewBinding.btnMode.isEnabled = true
+                isCaptureMode = false
+            }
+            else {
+                changeFlyingState(2) // 바로 정지
+                viewBinding.btnCapture.visibility = View.VISIBLE
+                viewBinding.btnMode.isEnabled = false // 모드 변경 불가능하게
+                isCaptureMode = true
+            }
         }
 
-        // 정지
-        viewBinding.btnStop.setOnClickListener {
-            if(isFlying) changeFlyingState(2)
+        // 촬영 버튼
+        viewBinding.btnCapture.setOnClickListener {
+            if(isCaptureMode) {
+                capture()
+            }
         }
 
+        // 속도 저장
         viewBinding.btnSpeedsave.setOnClickListener {
             if (isFlying && viewBinding.etSpeed.text.toString().isNotEmpty()) {
                 val value = viewBinding.etSpeed.text.toString().toInt()
@@ -280,6 +328,9 @@ class MainActivity : AppCompatActivity() {
         }
         else if (type == 3) {
             callResponse = apiCall!!.emergency()
+        }
+        else if (type == 4) {
+            callResponse = apiCall!!.capture()
         }
 
         callResponse!!.enqueue(object : Callback<BaseResponse> {
@@ -344,6 +395,63 @@ class MainActivity : AppCompatActivity() {
             override fun onFailure(call: Call<BaseResponse>, t: Throwable) {
                 Log.e("MainActivity", "Error!", t)
                 Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+
+    /**
+     * 캡처하기
+     */
+    private fun capture() {
+        val callResponse: Call<BaseResponse> = apiCall!!.capture()
+
+        callResponse.enqueue(object : Callback<BaseResponse> {
+            override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {
+                val body = response.body()
+                if(body != null) {
+                    if(body.code != 200) {
+                        Log.i("MainActivity", "${body.code} ${body.message}")
+                        Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
+                    }
+                    else {
+                        loadingDialog!!.show()
+                        // 성공했으면 사진 저장 시간 고려해서 잠시 Delayed
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            getCapture()
+                        }, 8000)
+                    }
+                }
+                else {
+                    Log.i("MainActivity", "Body NULL")
+                    Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onFailure(call: Call<BaseResponse>, t: Throwable) {
+                Log.e("MainActivity", "Error!", t)
+                Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
+            }
+        })
+    }
+
+    /**
+     * 캡쳐 사진 얻어오기
+     */
+    private fun getCapture() {
+        val callResponse: Call<ResponseBody> = apiCall!!.getcapture()
+
+        callResponse.enqueue(object : Callback<ResponseBody> {
+            override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
+                val bodyStream = response.body()!!.byteStream()
+                var bitmap = BitmapFactory.decodeStream(bodyStream)
+                loadingDialog!!.dismiss()
+            }
+
+            override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
+                loadingDialog!!.dismiss()
+                Log.e("MainActivity", "Error!", t)
+                Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
+
             }
         })
     }

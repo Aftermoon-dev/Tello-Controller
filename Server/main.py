@@ -1,8 +1,12 @@
 import multiprocessing
+import os.path
+import time
 
 from djitellopy import Tello
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from multiprocessing import Process
+import cv2
+import datetime
 
 def runTello(queue, errorDict):
     try:
@@ -23,16 +27,17 @@ def runTello(queue, errorDict):
         telloDrone.streamoff()
 
         isFlying = False
+        isStreamOn = False
         while True:
             if queue:
                 # 비상 정지 최우선
                 if "12;0" in queue:
-                    telloDrone.emergency()
+                    telloDrone.send_command_without_return("emergency")
                     queue[:] = []
                     continue
                 # 정지는 그 다음 우선
                 if "11;0" in queue:
-                    telloDrone.send_control_command("stop")
+                    telloDrone.send_command_without_return("stop")
                     queue[:] = []
                     continue
 
@@ -43,38 +48,54 @@ def runTello(queue, errorDict):
                 if cmd[0] == 0:
                     if not isFlying:
                         telloDrone.takeoff()
+                        queue[:] = []
                         isFlying = True
                 elif cmd[0] == 1:
                     if isFlying:
                         telloDrone.land()
+                        queue[:] = []
                         isFlying = False
                 elif cmd[0] == 2:
                     if isFlying:
-                        telloDrone.move_forward(cmd[1])
+                        telloDrone.send_command_without_return("forward {}".format(cmd[1]))
                 elif cmd[0] == 3:
                     if isFlying:
-                        telloDrone.move_back(cmd[1])
+                        telloDrone.send_command_without_return("back {}".format(cmd[1]))
                 elif cmd[0] == 4:
                     if isFlying:
-                        telloDrone.move_left(cmd[1])
+                        telloDrone.send_command_without_return("left {}".format(cmd[1]))
                 elif cmd[0] == 5:
                     if isFlying:
-                        telloDrone.move_right(cmd[1])
+                        telloDrone.send_command_without_return("right {}".format(cmd[1]))
                 elif cmd[0] == 6:
                     if isFlying:
-                        telloDrone.rotate_clockwise(cmd[1])
+                        telloDrone.send_command_without_return("cw {}".format(cmd[1]))
                 elif cmd[0] == 7:
                     if isFlying:
-                        telloDrone.rotate_counter_clockwise(cmd[1])
+                        telloDrone.send_command_without_return("ccw {}".format(cmd[1]))
                 elif cmd[0] == 8:
                     if isFlying:
-                        telloDrone.move_up(cmd[1])
+                        telloDrone.send_command_without_return("up {}".format(cmd[1]))
                 elif cmd[0] == 9:
                     if isFlying:
-                        telloDrone.move_down(cmd[1])
+                        telloDrone.send_command_without_return("down {}".format(cmd[1]))
                 elif cmd[0] == 10:
                     if isFlying:
-                        telloDrone.set_speed(cmd[1])
+                        telloDrone.send_command_without_return("speed {}".format(cmd[1]))
+                elif cmd[0] == 13:
+                    if not isStreamOn:
+                        telloDrone.streamon()
+                        isStreamOn = True
+                elif cmd[0] == 14:
+                    if isStreamOn:
+                        telloDrone.streamoff()
+                        isStreamOn = False
+                elif cmd[0] == 15:
+                    if isStreamOn:
+                        print('capture!')
+                        frame = telloDrone.get_frame_read()
+                        print('saved')
+                        cv2.imwrite('./capture/image.png', frame.frame)
 
     except Exception as e:
         errorDict['isError'] = True
@@ -315,6 +336,80 @@ def runFlask(queue, errorDict):
                 success=True,
                 msg='OK'
             )
+        else:
+            return jsonify(
+                code=500,
+                success=False,
+                msg='Drone Connection Error'
+            )
+
+    # Stream On
+    @app.route('/streamon')
+    def streamon():
+        if not errorDict['isError']:
+            queue.append('13;0')
+            return jsonify(
+                code=200,
+                success=True,
+                msg='OK'
+            )
+        else:
+            return jsonify(
+                code=500,
+                success=False,
+                msg='Drone Connection Error'
+            )
+
+    # Stream Off
+    @app.route('/streamoff')
+    def streamoff():
+        if not errorDict['isError']:
+            queue.append('14;0')
+            return jsonify(
+                code=200,
+                success=True,
+                msg='OK'
+            )
+        else:
+            return jsonify(
+                code=500,
+                success=False,
+                msg='Drone Connection Error'
+            )
+
+    # Capture
+    @app.route('/capture')
+    def capture():
+        if not errorDict['isError']:
+            if os.path.exists('./capture/image.png'):
+                os.remove('./capture/image.png')
+
+            queue.append('15;0')
+
+            return jsonify(
+                code=200,
+                success=True,
+                msg='success'
+            )
+        else:
+            return jsonify(
+                code=500,
+                success=False,
+                msg='Drone Connection Error'
+            )
+
+    # Get Last Capture
+    @app.route('/getcapture')
+    def getcapture():
+        if not errorDict['isError']:
+            if os.path.exists('./capture/image.png'):
+                return send_file('./capture/image.png', mimetype='image/png')
+            else:
+                return jsonify(
+                    code=500,
+                    success=False,
+                    msg='Image File Not Found'
+                )
         else:
             return jsonify(
                 code=500,

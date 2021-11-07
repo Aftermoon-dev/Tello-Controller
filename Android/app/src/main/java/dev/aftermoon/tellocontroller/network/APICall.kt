@@ -1,5 +1,6 @@
 package dev.aftermoon.tellocontroller.network
 
+import okhttp3.ResponseBody
 import retrofit2.Call
 import retrofit2.http.*
 
@@ -54,6 +55,13 @@ interface APICall {
     fun speed(
         @Query("speed") speed: Int
     ): Call<BaseResponse>
+
+    @GET("capture")
+    fun capture(): Call<BaseResponse>
+
+    @GET("getcapture")
+    @Streaming
+    fun getcapture(): Call<ResponseBody>
 
     @GET("stop")
     fun stop(): Call<BaseResponse>
