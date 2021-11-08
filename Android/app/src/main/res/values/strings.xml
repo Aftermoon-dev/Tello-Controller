@@ -16,6 +16,8 @@
     <string name="toast_distance_error">이동 거리를 입력해주세요</string>
     <string name="angle">%1$s : %2$s</string>
 
+    <string name="toast_saved">저장되었습니다.</string>
+
     <string name="error">에러가 발생했습니다.</string>
 
 </resources>

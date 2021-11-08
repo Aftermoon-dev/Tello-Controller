@@ -1,12 +1,15 @@
 package dev.aftermoon.tellocontroller
 
 import android.Manifest
+import android.content.ContentValues
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.hardware.*
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.MediaStore
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
@@ -27,6 +30,11 @@ import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.*
 import kotlin.math.abs
 import kotlin.math.round
 
@@ -86,7 +94,7 @@ class MainActivity : AppCompatActivity() {
 
         // Get Retrofit Client
         retrofitClient = RetrofitClient.getRetrofitClient("http://192.168.0.11:8921")
-        if(retrofitClient == null) {
+        if (retrofitClient == null) {
             Toast.makeText(this, getString(R.string.error), Toast.LENGTH_SHORT).show()
             finish()
         }
@@ -103,13 +111,29 @@ class MainActivity : AppCompatActivity() {
             override fun onSensorChanged(event: SensorEvent?) {
                 if (event != null) {
                     if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-                        System.arraycopy(event.values, 0, accelerometerReading, 0, accelerometerReading.size)
-                    }
-                    else if (event.sensor.type == Sensor.TYPE_MAGNETIC_FIELD) {
-                        System.arraycopy(event.values, 0, magnetometerReading, 0, magnetometerReading.size)
+                        System.arraycopy(
+                            event.values,
+                            0,
+                            accelerometerReading,
+                            0,
+                            accelerometerReading.size
+                        )
+                    } else if (event.sensor.type == Sensor.TYPE_MAGNETIC_FIELD) {
+                        System.arraycopy(
+                            event.values,
+                            0,
+                            magnetometerReading,
+                            0,
+                            magnetometerReading.size
+                        )
                     }
 
-                    val isSuccess = SensorManager.getRotationMatrix(rotationMatrix, null, accelerometerReading, magnetometerReading)
+                    val isSuccess = SensorManager.getRotationMatrix(
+                        rotationMatrix,
+                        null,
+                        accelerometerReading,
+                        magnetometerReading
+                    )
                     if (isSuccess && !isCaptureMode) {
                         SensorManager.getOrientation(rotationMatrix, orientationAngles)
 
@@ -122,15 +146,16 @@ class MainActivity : AppCompatActivity() {
 
                         val x = Math.toDegrees(orientationAngles[1].toDouble()) // X
                         val y = Math.toDegrees(orientationAngles[2].toDouble()) // Y
-                        val etDisText = viewBinding.etDistance.text.toString() // 사용자가 지정한 이동 거리 EditText
+                        val etDisText =
+                            viewBinding.etDistance.text.toString() // 사용자가 지정한 이동 거리 EditText
 
                         // 날고있으면서 마지막 명령 후 일정 시간이 지났으면
-                        if(isFlying && System.currentTimeMillis() > lastSendTime + 800) {
+                        if (isFlying && System.currentTimeMillis() > lastSendTime + 800) {
                             // 이동거리 설정이 되어있다면
                             if (!etDisText.isEmpty()) {
                                 // Azimuth는 절대적 수치를 나타냄
                                 // 시작 Azimuth를 저장하고 이를 이용해서 상대적 수치를 계산함
-                                if(startAzi == Double.MIN_VALUE) {
+                                if (startAzi == Double.MIN_VALUE) {
                                     startAzi = azi
                                 }
 
@@ -138,7 +163,7 @@ class MainActivity : AppCompatActivity() {
                                 // 이동거리가 20 ~ 500 사이일 경우
                                 if (moveDistance in 20..500) {
                                     // 일반 전진 모드일 경우
-                                    if(!isUpDownMode) {
+                                    if (!isUpDownMode) {
                                         // 앞
                                         if (x >= 28) {
                                             move(0, moveDistance)
@@ -189,8 +214,7 @@ class MainActivity : AppCompatActivity() {
                                                 lastRotateTime = System.currentTimeMillis()
                                             }
                                         }
-                                    }
-                                    else {
+                                    } else {
                                         // 앞으로 기울이면 위로
                                         if (x >= 28) {
                                             move(4, moveDistance)
@@ -207,15 +231,27 @@ class MainActivity : AppCompatActivity() {
                         }
 
                         // TextView에 Azimuth, Pitch, Roll 표시
-                        viewBinding.tvAzimuth.text = getString(R.string.angle, "Azimuth (-z)", (round(azi*100)/100).toString())
-                        viewBinding.tvXpos.text = getString(R.string.angle, "Pitch (x)", (round(x*100)/100).toString())
-                        viewBinding.tvYpos.text = getString(R.string.angle, "Roll (y)", (round(y*100)/100).toString())
+                        viewBinding.tvAzimuth.text = getString(
+                            R.string.angle,
+                            "Azimuth (-z)",
+                            (round(azi * 100) / 100).toString()
+                        )
+                        viewBinding.tvXpos.text = getString(
+                            R.string.angle,
+                            "Pitch (x)",
+                            (round(x * 100) / 100).toString()
+                        )
+                        viewBinding.tvYpos.text =
+                            getString(R.string.angle, "Roll (y)", (round(y * 100) / 100).toString())
                     }
                 }
             }
 
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-                if (sensor != null) Log.d("MainActivity", "Accuracy Changed ${sensor.name} / $accuracy")
+                if (sensor != null) Log.d(
+                    "MainActivity",
+                    "Accuracy Changed ${sensor.name} / $accuracy"
+                )
             }
         }
     }
@@ -244,8 +280,7 @@ class MainActivity : AppCompatActivity() {
                 viewBinding.btnEmergency.visibility = View.VISIBLE
                 changeFlyingState(0)
                 isFlying = true
-            }
-            else {
+            } else {
                 viewBinding.btnTakeoff.text = getString(R.string.btn_takeoff)
                 viewBinding.btnEmergency.visibility = View.GONE
                 changeFlyingState(1)
@@ -268,11 +303,10 @@ class MainActivity : AppCompatActivity() {
 
         // 모드 변경 버튼
         viewBinding.btnMode.setOnClickListener {
-            if(isUpDownMode) {
+            if (isUpDownMode) {
                 viewBinding.btnMode.text = getString(R.string.btn_move)
                 isUpDownMode = false
-            }
-            else {
+            } else {
                 viewBinding.btnMode.text = getString(R.string.btn_up)
                 isUpDownMode = true
             }
@@ -280,12 +314,11 @@ class MainActivity : AppCompatActivity() {
 
         // 사진 촬영 모드 버튼
         viewBinding.btnStopmode.setOnClickListener {
-            if(isCaptureMode) {
+            if (isCaptureMode) {
                 viewBinding.btnCapture.visibility = View.GONE
                 viewBinding.btnMode.isEnabled = true
                 isCaptureMode = false
-            }
-            else {
+            } else {
                 changeFlyingState(2) // 바로 정지
                 viewBinding.btnCapture.visibility = View.VISIBLE
                 viewBinding.btnMode.isEnabled = false // 모드 변경 불가능하게
@@ -295,7 +328,7 @@ class MainActivity : AppCompatActivity() {
 
         // 촬영 버튼
         viewBinding.btnCapture.setOnClickListener {
-            if(isCaptureMode) {
+            if (isCaptureMode) {
                 capture()
             }
         }
@@ -319,36 +352,32 @@ class MainActivity : AppCompatActivity() {
 
         if (type == 0) {
             callResponse = apiCall!!.takeOff()
-        }
-        else if (type == 1) {
+        } else if (type == 1) {
             callResponse = apiCall!!.land()
-        }
-        else if (type == 2) {
+        } else if (type == 2) {
             callResponse = apiCall!!.stop()
-        }
-        else if (type == 3) {
+        } else if (type == 3) {
             callResponse = apiCall!!.emergency()
-        }
-        else if (type == 4) {
+        } else if (type == 4) {
             callResponse = apiCall!!.capture()
         }
 
         callResponse!!.enqueue(object : Callback<BaseResponse> {
             override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {
                 val body = response.body()
-                if(body != null) {
-                    if(body.code != 200) {
+                if (body != null) {
+                    if (body.code != 200) {
                         Log.i("MainActivity", "${body.code} ${body.message}")
                     }
-                }
-                else {
+                } else {
                     Log.i("MainActivity", "Body NULL")
                 }
             }
 
             override fun onFailure(call: Call<BaseResponse>, t: Throwable) {
                 Log.e("MainActivity", "Error!", t)
-                Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT)
+                    .show()
             }
         })
     }
@@ -362,39 +391,34 @@ class MainActivity : AppCompatActivity() {
 
         if (type == 0) {
             callResponse = apiCall!!.forward(distance)
-        }
-        else if (type == 1) {
+        } else if (type == 1) {
             callResponse = apiCall!!.back(distance)
-        }
-        else if (type == 2) {
+        } else if (type == 2) {
             callResponse = apiCall!!.left(distance)
-        }
-        else if (type == 3) {
+        } else if (type == 3) {
             callResponse = apiCall!!.right(distance)
-        }
-        else if (type == 4) {
+        } else if (type == 4) {
             callResponse = apiCall!!.up(distance)
-        }
-        else if (type == 5) {
+        } else if (type == 5) {
             callResponse = apiCall!!.down(distance)
         }
 
         callResponse!!.enqueue(object : Callback<BaseResponse> {
             override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {
                 val body = response.body()
-                if(body != null) {
-                    if(body.code != 200) {
+                if (body != null) {
+                    if (body.code != 200) {
                         Log.i("MainActivity", "${body.code} ${body.message}")
                     }
-                }
-                else {
+                } else {
                     Log.i("MainActivity", "Body NULL")
                 }
             }
 
             override fun onFailure(call: Call<BaseResponse>, t: Throwable) {
                 Log.e("MainActivity", "Error!", t)
-                Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT)
+                    .show()
             }
         })
     }
@@ -408,28 +432,32 @@ class MainActivity : AppCompatActivity() {
         callResponse.enqueue(object : Callback<BaseResponse> {
             override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {
                 val body = response.body()
-                if(body != null) {
-                    if(body.code != 200) {
+                if (body != null) {
+                    if (body.code != 200) {
                         Log.i("MainActivity", "${body.code} ${body.message}")
-                        Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
-                    }
-                    else {
+                        Toast.makeText(
+                            this@MainActivity,
+                            getString(R.string.error),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
                         loadingDialog!!.show()
                         // 성공했으면 사진 저장 시간 고려해서 잠시 Delayed
                         Handler(Looper.getMainLooper()).postDelayed({
                             getCapture()
                         }, 8000)
                     }
-                }
-                else {
+                } else {
                     Log.i("MainActivity", "Body NULL")
-                    Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT)
+                        .show()
                 }
             }
 
             override fun onFailure(call: Call<BaseResponse>, t: Throwable) {
                 Log.e("MainActivity", "Error!", t)
-                Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT)
+                    .show()
             }
         })
     }
@@ -439,11 +467,50 @@ class MainActivity : AppCompatActivity() {
      */
     private fun getCapture() {
         val callResponse: Call<ResponseBody> = apiCall!!.getcapture()
+        val dateFormat = SimpleDateFormat("yyyymmddHHmmss", Locale.getDefault())
+        val date = dateFormat.format(Calendar.getInstance().time)
 
         callResponse.enqueue(object : Callback<ResponseBody> {
             override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
                 val bodyStream = response.body()!!.byteStream()
                 var bitmap = BitmapFactory.decodeStream(bodyStream)
+
+
+                val values = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, "droneimage-${date}")
+                    put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                    put(MediaStore.Images.Media.IS_PENDING, 1)
+                }
+
+                val collection =
+                    MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                val item = contentResolver.insert(collection, values)!!
+
+                contentResolver.openFileDescriptor(item, "w", null).use {
+                    // write something to OutputStream
+                    FileOutputStream(it!!.fileDescriptor).use { outputStream ->
+                        val bos: ByteArrayOutputStream = ByteArrayOutputStream()
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 0 ,bos)
+                        val imageInputStream = ByteArrayInputStream(bos.toByteArray())
+
+                        while (true) {
+
+                            val data = imageInputStream.read()
+                            if (data == -1) {
+                                break
+                            }
+                            outputStream.write(data)
+                        }
+                        imageInputStream.close()
+                        outputStream.close()
+                    }
+                }
+
+                values.clear()
+                values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                contentResolver.update(item, values, null, null)
+
+                Toast.makeText(this@MainActivity, getString(R.string.toast_saved), Toast.LENGTH_SHORT).show()
                 loadingDialog!!.dismiss()
             }
 
@@ -451,7 +518,6 @@ class MainActivity : AppCompatActivity() {
                 loadingDialog!!.dismiss()
                 Log.e("MainActivity", "Error!", t)
                 Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
-
             }
         })
     }
@@ -465,27 +531,26 @@ class MainActivity : AppCompatActivity() {
 
         if (type == 0) {
             callResponse = apiCall!!.rotate_cw(angle)
-        }
-        else if (type == 1) {
+        } else if (type == 1) {
             callResponse = apiCall!!.rotate_ccw(angle)
         }
 
         callResponse!!.enqueue(object : Callback<BaseResponse> {
             override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {
                 val body = response.body()
-                if(body != null) {
-                    if(body.code != 200) {
+                if (body != null) {
+                    if (body.code != 200) {
                         Log.i("MainActivity", "${body.code} ${body.message}")
                     }
-                }
-                else {
+                } else {
                     Log.i("MainActivity", "Body NULL")
                 }
             }
 
             override fun onFailure(call: Call<BaseResponse>, t: Throwable) {
                 Log.e("MainActivity", "Error!", t)
-                Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT)
+                    .show()
             }
         })
     }
@@ -499,19 +564,19 @@ class MainActivity : AppCompatActivity() {
         callResponse!!.enqueue(object : Callback<BaseResponse> {
             override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {
                 val body = response.body()
-                if(body != null) {
-                    if(body.code != 200) {
+                if (body != null) {
+                    if (body.code != 200) {
                         Log.i("MainActivity", "${body.code} ${body.message}")
                     }
-                }
-                else {
+                } else {
                     Log.i("MainActivity", "Body NULL")
                 }
             }
 
             override fun onFailure(call: Call<BaseResponse>, t: Throwable) {
                 Log.e("MainActivity", "Error!", t)
-                Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT)
+                    .show()
             }
         })
     }
@@ -524,7 +589,7 @@ class MainActivity : AppCompatActivity() {
             .setPermissions(Manifest.permission.ACTIVITY_RECOGNITION)
             .check()
 
-        if(!permission.isGranted) {
+        if (!permission.isGranted) {
             finishAndRemoveTask()
         }
     }
@@ -532,8 +597,16 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         // Sensor Listener 등록
-        sensorManager!!.registerListener(sensorEventListener, accelSensor, SensorManager.SENSOR_DELAY_NORMAL)
-        sensorManager!!.registerListener(sensorEventListener, magneticSensor,  SensorManager.SENSOR_DELAY_NORMAL)
+        sensorManager!!.registerListener(
+            sensorEventListener,
+            accelSensor,
+            SensorManager.SENSOR_DELAY_NORMAL
+        )
+        sensorManager!!.registerListener(
+            sensorEventListener,
+            magneticSensor,
+            SensorManager.SENSOR_DELAY_NORMAL
+        )
     }
 
     override fun onPause() {
