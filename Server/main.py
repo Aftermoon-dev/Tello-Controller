@@ -57,31 +57,31 @@ def runTello(queue, errorDict):
                         isFlying = False
                 elif cmd[0] == 2:
                     if isFlying:
-                        telloDrone.send_command_without_return("forward {}".format(cmd[1]))
+                        telloDrone.move_forward(cmd[1])
                 elif cmd[0] == 3:
                     if isFlying:
-                        telloDrone.send_command_without_return("back {}".format(cmd[1]))
+                        telloDrone.move_back(cmd[1])
                 elif cmd[0] == 4:
                     if isFlying:
-                        telloDrone.send_command_without_return("left {}".format(cmd[1]))
+                        telloDrone.move_left(cmd[1])
                 elif cmd[0] == 5:
                     if isFlying:
-                        telloDrone.send_command_without_return("right {}".format(cmd[1]))
+                        telloDrone.move_right(cmd[1])
                 elif cmd[0] == 6:
                     if isFlying:
-                        telloDrone.send_command_without_return("cw {}".format(cmd[1]))
+                        telloDrone.rotate_clockwise(cmd[1])
                 elif cmd[0] == 7:
                     if isFlying:
-                        telloDrone.send_command_without_return("ccw {}".format(cmd[1]))
+                        telloDrone.rotate_counter_clockwise(cmd[1])
                 elif cmd[0] == 8:
                     if isFlying:
-                        telloDrone.send_command_without_return("up {}".format(cmd[1]))
+                        telloDrone.move_up(cmd[1])
                 elif cmd[0] == 9:
                     if isFlying:
-                        telloDrone.send_command_without_return("down {}".format(cmd[1]))
+                        telloDrone.move_down(cmd[1])
                 elif cmd[0] == 10:
                     if isFlying:
-                        telloDrone.send_command_without_return("speed {}".format(cmd[1]))
+                        telloDrone.set_speed(cmd[1])
                 elif cmd[0] == 13:
                     if not isStreamOn:
                         telloDrone.streamon()
@@ -96,6 +96,9 @@ def runTello(queue, errorDict):
                         frame = telloDrone.get_frame_read()
                         print('saved')
                         cv2.imwrite('./capture/image.png', frame.frame)
+                elif cmd[0] == 16:
+                    if isFlying:
+                        telloDrone.send_command_without_return("stop")
 
     except Exception as e:
         errorDict['isError'] = True
@@ -313,7 +316,12 @@ def runFlask(queue, errorDict):
     @app.route('/stop')
     def stop():
         if not errorDict['isError']:
-            queue.append('11;0')
+            force = request.args.get('force', 0)
+            if force == 0:
+                queue.append('16;0')
+            else:
+                queue.append('11;0')
+
             return jsonify(
                 code=200,
                 success=True,
