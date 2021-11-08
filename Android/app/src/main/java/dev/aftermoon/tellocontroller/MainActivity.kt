@@ -214,8 +214,7 @@ class MainActivity : AppCompatActivity() {
                                                 startAzi = azi // 새 각도로 변했으므로 새 각도를 startAzi로
                                                 lastRotateTime = System.currentTimeMillis()
                                             }
-                                        }
-                                        else if(!isAlreadySendStableStop) {
+                                        } else if (!isAlreadySendStableStop) {
                                             // 그냥 정지 보내기
                                             changeFlyingState(20)
                                             isAlreadySendStableStop = true
@@ -268,6 +267,7 @@ class MainActivity : AppCompatActivity() {
     private fun setButtonEvent() {
         // 이/착륙 버튼
         viewBinding.btnTakeoff.setOnClickListener {
+            loadingDialog!!.show()
             // Reset Value
             startAzi = Double.MIN_VALUE
             lastSendTime = 0L
@@ -275,7 +275,7 @@ class MainActivity : AppCompatActivity() {
 
             if (!isFlying) {
                 if (viewBinding.etDistance.text.isNullOrEmpty()) {
-                    viewBinding.etDistance.setText("60")
+                    viewBinding.etDistance.setText("30")
                 }
 
                 if (viewBinding.etSpeed.text.isNullOrEmpty()) {
@@ -292,6 +292,11 @@ class MainActivity : AppCompatActivity() {
                 changeFlyingState(1)
                 isFlying = false
             }
+
+
+            Handler(Looper.getMainLooper()).postDelayed({
+                loadingDialog!!.dismiss()
+            }, 3000)
         }
 
         // 비상 버튼
@@ -320,21 +325,28 @@ class MainActivity : AppCompatActivity() {
 
         // 사진 촬영 모드 버튼
         viewBinding.btnStopmode.setOnClickListener {
+            loadingDialog!!.show()
+
             if (isCaptureMode) {
                 changeFlyingState(6)
                 isCaptureMode = false
+                viewBinding.btnStopmode.text = getString(R.string.btn_stop)
                 viewBinding.btnCapture.visibility = View.GONE
                 viewBinding.btnForcestop.visibility = View.VISIBLE
                 viewBinding.btnMode.isEnabled = true
-
             } else {
                 isCaptureMode = true
                 changeFlyingState(21) // 바로 정지
                 changeFlyingState(5)
+                viewBinding.btnStopmode.text = getString(R.string.btn_stop_unlock)
                 viewBinding.btnCapture.visibility = View.VISIBLE
                 viewBinding.btnForcestop.visibility = View.GONE
                 viewBinding.btnMode.isEnabled = false // 모드 변경 불가능하게
             }
+
+            Handler(Looper.getMainLooper()).postDelayed({
+                loadingDialog!!.dismiss()
+            }, 2000)
         }
 
         // 촬영 버튼
@@ -500,76 +512,74 @@ class MainActivity : AppCompatActivity() {
 
         callResponse.enqueue(object : Callback<ResponseBody> {
             override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
-                if(response.isSuccessful) {
-                    val bodyStream = response.body()!!.byteStream()
-                    val imageBA = bodyStream.readBytes()
-                    val bitmap: Bitmap? = BitmapFactory.decodeByteArray(imageBA, 0, imageBA.size)
+                if (response.isSuccessful) {
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val bodyStream = response.body()!!.byteStream()
+                        val imageBA = bodyStream.readBytes()
+                        val bitmap: Bitmap? =
+                            BitmapFactory.decodeByteArray(imageBA, 0, imageBA.size)
 
-                    if (bitmap != null) {
-                        val bos = ByteArrayOutputStream()
-                        bitmap.compress(Bitmap.CompressFormat.PNG, 0, bos)
+                        if (bitmap != null) {
+                            val bos = ByteArrayOutputStream()
+                            bitmap.compress(Bitmap.CompressFormat.PNG, 0, bos)
 
-                        val collection =
-                            MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                            val collection =
+                                MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
 
-                        val values = ContentValues().apply {
-                            put(MediaStore.Images.Media.DISPLAY_NAME, "droneimage-${date}")
-                            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-                            put(MediaStore.Images.Media.IS_PENDING, 1)
-                        }
+                            val values = ContentValues().apply {
+                                put(MediaStore.Images.Media.DISPLAY_NAME, "droneimage-${date}")
+                                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                                put(MediaStore.Images.Media.IS_PENDING, 1)
+                            }
 
-                        val item = contentResolver.insert(collection, values)!!
+                            val item = contentResolver.insert(collection, values)!!
 
-                        contentResolver.openFileDescriptor(item, "w", null).use {
-                            FileOutputStream(it!!.fileDescriptor).use { outputStream ->
-                                val imageInputStream = ByteArrayInputStream(bos.toByteArray())
+                            contentResolver.openFileDescriptor(item, "w", null).use {
+                                FileOutputStream(it!!.fileDescriptor).use { outputStream ->
+                                    val imageInputStream = ByteArrayInputStream(bos.toByteArray())
 
-                                while (true) {
+                                    while (true) {
 
-                                    val data = imageInputStream.read()
-                                    if (data == -1) {
-                                        break
+                                        val data = imageInputStream.read()
+                                        if (data == -1) {
+                                            break
+                                        }
+                                        outputStream.write(data)
                                     }
-                                    outputStream.write(data)
+                                    imageInputStream.close()
+                                    outputStream.close()
                                 }
-                                imageInputStream.close()
-                                outputStream.close()
+                            }
+
+                            values.clear()
+                            values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                            contentResolver.update(item, values, null, null)
+
+                            CoroutineScope(Main).launch {
+                                Toast.makeText(this@MainActivity, getString(R.string.toast_saved), Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            CoroutineScope(Main).launch {
+                                Log.e("MainActivity", "Error! ${response.errorBody()}")
+                                Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
                             }
                         }
-
-                        values.clear()
-                        values.put(MediaStore.Images.Media.IS_PENDING, 0)
-                        contentResolver.update(item, values, null, null)
-
-                        Toast.makeText(
-                            this@MainActivity,
-                            getString(R.string.toast_saved),
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    } else {
-                        Log.e("MainActivity", "Error!")
-                        Toast.makeText(
-                            this@MainActivity,
-                            getString(R.string.error),
-                            Toast.LENGTH_SHORT
-                        ).show()
                     }
-                    loadingDialog!!.dismiss()
                 }
                 else {
-                    Log.e("MainActivity", "Error! ${response.errorBody()}")
-                    Toast.makeText(
-                        this@MainActivity,
-                        getString(R.string.error),
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Toast.makeText(this@MainActivity, getString(R.string.toast_saved), Toast.LENGTH_SHORT).show()
                 }
+                loadingDialog!!.dismiss()
             }
 
             override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
                 loadingDialog!!.dismiss()
                 Log.e("MainActivity", "Error!", t)
-                Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.error),
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         })
     }
@@ -590,7 +600,10 @@ class MainActivity : AppCompatActivity() {
         isAlreadySendStableStop = false
 
         callResponse!!.enqueue(object : Callback<BaseResponse> {
-            override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {
+            override fun onResponse(
+                call: Call<BaseResponse>,
+                response: Response<BaseResponse>
+            ) {
                 val body = response.body()
                 if (body != null) {
                     if (body.code != 200) {
@@ -603,7 +616,11 @@ class MainActivity : AppCompatActivity() {
 
             override fun onFailure(call: Call<BaseResponse>, t: Throwable) {
                 Log.e("MainActivity", "Error!", t)
-                Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT)
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.error),
+                    Toast.LENGTH_SHORT
+                )
                     .show()
             }
         })
@@ -616,7 +633,10 @@ class MainActivity : AppCompatActivity() {
         var callResponse: Call<BaseResponse> = apiCall!!.speed(speed)
 
         callResponse!!.enqueue(object : Callback<BaseResponse> {
-            override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {
+            override fun onResponse(
+                call: Call<BaseResponse>,
+                response: Response<BaseResponse>
+            ) {
                 val body = response.body()
                 if (body != null) {
                     if (body.code != 200) {
@@ -629,7 +649,11 @@ class MainActivity : AppCompatActivity() {
 
             override fun onFailure(call: Call<BaseResponse>, t: Throwable) {
                 Log.e("MainActivity", "Error!", t)
-                Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT)
+                Toast.makeText(
+                    this@MainActivity,
+                    getString(R.string.error),
+                    Toast.LENGTH_SHORT
+                )
                     .show()
             }
         })
