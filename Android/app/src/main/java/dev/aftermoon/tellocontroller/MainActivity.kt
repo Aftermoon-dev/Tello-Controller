@@ -64,6 +64,7 @@ class MainActivity : AppCompatActivity() {
     private var lastRotateTime: Long = Long.MIN_VALUE
     private var isUpDownMode = false
     private var isCaptureMode = false
+    private var isAlreadySendStableStop = false
 
     /** Loading **/
     private var loadingDialog: LoadingDialog? = null
@@ -93,7 +94,7 @@ class MainActivity : AppCompatActivity() {
         loadingDialog = LoadingDialog(this)
 
         // Get Retrofit Client
-        retrofitClient = RetrofitClient.getRetrofitClient("http://192.168.0.11:8921")
+        retrofitClient = RetrofitClient.getRetrofitClient("http://192.168.0.2:8921")
         if (retrofitClient == null) {
             Toast.makeText(this, getString(R.string.error), Toast.LENGTH_SHORT).show()
             finish()
@@ -214,6 +215,11 @@ class MainActivity : AppCompatActivity() {
                                                 lastRotateTime = System.currentTimeMillis()
                                             }
                                         }
+                                        else if(!isAlreadySendStableStop) {
+                                            // 그냥 정지 보내기
+                                            changeFlyingState(20)
+                                            isAlreadySendStableStop = true
+                                        }
                                     } else {
                                         // 앞으로 기울이면 위로
                                         if (x >= 28) {
@@ -304,10 +310,10 @@ class MainActivity : AppCompatActivity() {
         // 모드 변경 버튼
         viewBinding.btnMode.setOnClickListener {
             if (isUpDownMode) {
-                viewBinding.btnMode.text = getString(R.string.btn_move)
+                viewBinding.btnMode.text = getString(R.string.btn_up)
                 isUpDownMode = false
             } else {
-                viewBinding.btnMode.text = getString(R.string.btn_up)
+                viewBinding.btnMode.text = getString(R.string.btn_move)
                 isUpDownMode = true
             }
         }
@@ -315,14 +321,19 @@ class MainActivity : AppCompatActivity() {
         // 사진 촬영 모드 버튼
         viewBinding.btnStopmode.setOnClickListener {
             if (isCaptureMode) {
-                viewBinding.btnCapture.visibility = View.GONE
-                viewBinding.btnMode.isEnabled = true
+                changeFlyingState(6)
                 isCaptureMode = false
+                viewBinding.btnCapture.visibility = View.GONE
+                viewBinding.btnForcestop.visibility = View.VISIBLE
+                viewBinding.btnMode.isEnabled = true
+
             } else {
-                changeFlyingState(2) // 바로 정지
-                viewBinding.btnCapture.visibility = View.VISIBLE
-                viewBinding.btnMode.isEnabled = false // 모드 변경 불가능하게
                 isCaptureMode = true
+                changeFlyingState(21) // 바로 정지
+                changeFlyingState(5)
+                viewBinding.btnCapture.visibility = View.VISIBLE
+                viewBinding.btnForcestop.visibility = View.GONE
+                viewBinding.btnMode.isEnabled = false // 모드 변경 불가능하게
             }
         }
 
@@ -340,6 +351,14 @@ class MainActivity : AppCompatActivity() {
                 if (value in 10..100) setSpeed(value)
             }
         }
+
+        // 강제 정지 버튼
+        viewBinding.btnForcestop.setOnClickListener {
+            if (isFlying) {
+                isAlreadySendStableStop = false
+                changeFlyingState(21)
+            }
+        }
     }
 
     /**
@@ -354,13 +373,20 @@ class MainActivity : AppCompatActivity() {
             callResponse = apiCall!!.takeOff()
         } else if (type == 1) {
             callResponse = apiCall!!.land()
-        } else if (type == 2) {
-            callResponse = apiCall!!.stop()
+        } else if (type == 20) {
+            callResponse = apiCall!!.stop(0)
+        } else if (type == 21) {
+            callResponse = apiCall!!.stop(1)
         } else if (type == 3) {
             callResponse = apiCall!!.emergency()
         } else if (type == 4) {
             callResponse = apiCall!!.capture()
+        } else if (type == 5) {
+            callResponse = apiCall!!.streamon()
+        } else if (type == 6) {
+            callResponse = apiCall!!.streamoff()
         }
+
 
         callResponse!!.enqueue(object : Callback<BaseResponse> {
             override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {
@@ -402,6 +428,8 @@ class MainActivity : AppCompatActivity() {
         } else if (type == 5) {
             callResponse = apiCall!!.down(distance)
         }
+
+        isAlreadySendStableStop = false
 
         callResponse!!.enqueue(object : Callback<BaseResponse> {
             override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {
@@ -473,44 +501,53 @@ class MainActivity : AppCompatActivity() {
         callResponse.enqueue(object : Callback<ResponseBody> {
             override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
                 val bodyStream = response.body()!!.byteStream()
-                var bitmap = BitmapFactory.decodeStream(bodyStream)
+                val bitmap: Bitmap? = BitmapFactory.decodeStream(bodyStream)
 
-
-                val values = ContentValues().apply {
-                    put(MediaStore.Images.Media.DISPLAY_NAME, "droneimage-${date}")
-                    put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                    put(MediaStore.Images.Media.IS_PENDING, 1)
-                }
-
-                val collection =
-                    MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-                val item = contentResolver.insert(collection, values)!!
-
-                contentResolver.openFileDescriptor(item, "w", null).use {
-                    // write something to OutputStream
-                    FileOutputStream(it!!.fileDescriptor).use { outputStream ->
-                        val bos: ByteArrayOutputStream = ByteArrayOutputStream()
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 0 ,bos)
-                        val imageInputStream = ByteArrayInputStream(bos.toByteArray())
-
-                        while (true) {
-
-                            val data = imageInputStream.read()
-                            if (data == -1) {
-                                break
-                            }
-                            outputStream.write(data)
-                        }
-                        imageInputStream.close()
-                        outputStream.close()
+                if(bitmap != null) {
+                    val values = ContentValues().apply {
+                        put(MediaStore.Images.Media.DISPLAY_NAME, "droneimage-${date}")
+                        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                        put(MediaStore.Images.Media.IS_PENDING, 1)
                     }
+
+                    val collection =
+                        MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                    val item = contentResolver.insert(collection, values)!!
+
+                    contentResolver.openFileDescriptor(item, "w", null).use {
+                        // write something to OutputStream
+                        FileOutputStream(it!!.fileDescriptor).use { outputStream ->
+                            val bos = ByteArrayOutputStream()
+                            bitmap!!.compress(Bitmap.CompressFormat.JPEG, 0, bos)
+                            val imageInputStream = ByteArrayInputStream(bos.toByteArray())
+
+                            while (true) {
+
+                                val data = imageInputStream.read()
+                                if (data == -1) {
+                                    break
+                                }
+                                outputStream.write(data)
+                            }
+                            imageInputStream.close()
+                            outputStream.close()
+                        }
+                    }
+
+                    values.clear()
+                    values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                    contentResolver.update(item, values, null, null)
+
+                    Toast.makeText(
+                        this@MainActivity,
+                        getString(R.string.toast_saved),
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
-
-                values.clear()
-                values.put(MediaStore.Images.Media.IS_PENDING, 0)
-                contentResolver.update(item, values, null, null)
-
-                Toast.makeText(this@MainActivity, getString(R.string.toast_saved), Toast.LENGTH_SHORT).show()
+                else {
+                    Log.e("MainActivity", "Error!")
+                    Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
+                }
                 loadingDialog!!.dismiss()
             }
 
@@ -534,6 +571,8 @@ class MainActivity : AppCompatActivity() {
         } else if (type == 1) {
             callResponse = apiCall!!.rotate_ccw(angle)
         }
+
+        isAlreadySendStableStop = false
 
         callResponse!!.enqueue(object : Callback<BaseResponse> {
             override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {

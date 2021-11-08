@@ -56,6 +56,12 @@ interface APICall {
         @Query("speed") speed: Int
     ): Call<BaseResponse>
 
+    @GET("streamon")
+    fun streamon(): Call<BaseResponse>
+
+    @GET("streamoff")
+    fun streamoff(): Call<BaseResponse>
+
     @GET("capture")
     fun capture(): Call<BaseResponse>
 
@@ -64,7 +70,9 @@ interface APICall {
     fun getcapture(): Call<ResponseBody>
 
     @GET("stop")
-    fun stop(): Call<BaseResponse>
+    fun stop(
+        @Query("force") force: Int
+    ): Call<BaseResponse>
 
     @GET("emergency")
     fun emergency(): Call<BaseResponse>
