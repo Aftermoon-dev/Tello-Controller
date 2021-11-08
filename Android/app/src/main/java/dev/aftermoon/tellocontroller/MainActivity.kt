@@ -500,55 +500,70 @@ class MainActivity : AppCompatActivity() {
 
         callResponse.enqueue(object : Callback<ResponseBody> {
             override fun onResponse(call: Call<ResponseBody>, response: Response<ResponseBody>) {
-                val bodyStream = response.body()!!.byteStream()
-                val bitmap: Bitmap? = BitmapFactory.decodeStream(bodyStream)
+                if(response.isSuccessful) {
+                    val bodyStream = response.body()!!.byteStream()
+                    val imageBA = bodyStream.readBytes()
+                    val bitmap: Bitmap? = BitmapFactory.decodeByteArray(imageBA, 0, imageBA.size)
 
-                if(bitmap != null) {
-                    val values = ContentValues().apply {
-                        put(MediaStore.Images.Media.DISPLAY_NAME, "droneimage-${date}")
-                        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                        put(MediaStore.Images.Media.IS_PENDING, 1)
-                    }
+                    if (bitmap != null) {
+                        val bos = ByteArrayOutputStream()
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 0, bos)
 
-                    val collection =
-                        MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
-                    val item = contentResolver.insert(collection, values)!!
+                        val collection =
+                            MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
 
-                    contentResolver.openFileDescriptor(item, "w", null).use {
-                        // write something to OutputStream
-                        FileOutputStream(it!!.fileDescriptor).use { outputStream ->
-                            val bos = ByteArrayOutputStream()
-                            bitmap!!.compress(Bitmap.CompressFormat.JPEG, 0, bos)
-                            val imageInputStream = ByteArrayInputStream(bos.toByteArray())
-
-                            while (true) {
-
-                                val data = imageInputStream.read()
-                                if (data == -1) {
-                                    break
-                                }
-                                outputStream.write(data)
-                            }
-                            imageInputStream.close()
-                            outputStream.close()
+                        val values = ContentValues().apply {
+                            put(MediaStore.Images.Media.DISPLAY_NAME, "droneimage-${date}")
+                            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                            put(MediaStore.Images.Media.IS_PENDING, 1)
                         }
+
+                        val item = contentResolver.insert(collection, values)!!
+
+                        contentResolver.openFileDescriptor(item, "w", null).use {
+                            FileOutputStream(it!!.fileDescriptor).use { outputStream ->
+                                val imageInputStream = ByteArrayInputStream(bos.toByteArray())
+
+                                while (true) {
+
+                                    val data = imageInputStream.read()
+                                    if (data == -1) {
+                                        break
+                                    }
+                                    outputStream.write(data)
+                                }
+                                imageInputStream.close()
+                                outputStream.close()
+                            }
+                        }
+
+                        values.clear()
+                        values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                        contentResolver.update(item, values, null, null)
+
+                        Toast.makeText(
+                            this@MainActivity,
+                            getString(R.string.toast_saved),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        Log.e("MainActivity", "Error!")
+                        Toast.makeText(
+                            this@MainActivity,
+                            getString(R.string.error),
+                            Toast.LENGTH_SHORT
+                        ).show()
                     }
-
-                    values.clear()
-                    values.put(MediaStore.Images.Media.IS_PENDING, 0)
-                    contentResolver.update(item, values, null, null)
-
+                    loadingDialog!!.dismiss()
+                }
+                else {
+                    Log.e("MainActivity", "Error! ${response.errorBody()}")
                     Toast.makeText(
                         this@MainActivity,
-                        getString(R.string.toast_saved),
+                        getString(R.string.error),
                         Toast.LENGTH_SHORT
                     ).show()
                 }
-                else {
-                    Log.e("MainActivity", "Error!")
-                    Toast.makeText(this@MainActivity, getString(R.string.error), Toast.LENGTH_SHORT).show()
-                }
-                loadingDialog!!.dismiss()
             }
 
             override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
