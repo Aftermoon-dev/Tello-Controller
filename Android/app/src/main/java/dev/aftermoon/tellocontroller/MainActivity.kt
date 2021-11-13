@@ -284,13 +284,24 @@ class MainActivity : AppCompatActivity() {
 
                 viewBinding.btnTakeoff.text = getString(R.string.btn_land)
                 viewBinding.btnEmergency.visibility = View.VISIBLE
+                viewBinding.btnForcestop.visibility = View.VISIBLE
+                viewBinding.btnStopmode.visibility = View.VISIBLE
+                viewBinding.btnMode.visibility = View.VISIBLE
+
                 changeFlyingState(0)
                 isFlying = true
             } else {
                 viewBinding.btnTakeoff.text = getString(R.string.btn_takeoff)
                 viewBinding.btnEmergency.visibility = View.GONE
+                viewBinding.btnEmergency.visibility = View.GONE
+                viewBinding.btnForcestop.visibility = View.GONE
+                viewBinding.btnStopmode.visibility = View.GONE
+                viewBinding.btnMode.visibility = View.GONE
+
                 changeFlyingState(1)
                 isFlying = false
+                isCaptureMode = false;
+                isUpDownMode = false
             }
 
 
@@ -308,8 +319,14 @@ class MainActivity : AppCompatActivity() {
 
             viewBinding.btnTakeoff.text = getString(R.string.btn_takeoff)
             viewBinding.btnEmergency.visibility = View.GONE
+            viewBinding.btnForcestop.visibility = View.GONE
+            viewBinding.btnStopmode.visibility = View.GONE
+            viewBinding.btnMode.visibility = View.GONE
+
             changeFlyingState(3)
             isFlying = false
+            isCaptureMode = false;
+            isUpDownMode = false
         }
 
         // 모드 변경 버튼
@@ -335,6 +352,7 @@ class MainActivity : AppCompatActivity() {
                 viewBinding.btnForcestop.visibility = View.VISIBLE
                 viewBinding.btnMode.isEnabled = true
             } else {
+                startAzi = Double.MIN_VALUE
                 isCaptureMode = true
                 changeFlyingState(21) // 바로 정지
                 changeFlyingState(5)
@@ -481,7 +499,6 @@ class MainActivity : AppCompatActivity() {
                             Toast.LENGTH_SHORT
                         ).show()
                     } else {
-                        loadingDialog!!.show()
                         // 성공했으면 사진 저장 시간 고려해서 잠시 Delayed
                         Handler(Looper.getMainLooper()).postDelayed({
                             getCapture()
@@ -569,11 +586,9 @@ class MainActivity : AppCompatActivity() {
                 else {
                     Toast.makeText(this@MainActivity, getString(R.string.toast_saved), Toast.LENGTH_SHORT).show()
                 }
-                loadingDialog!!.dismiss()
             }
 
             override fun onFailure(call: Call<ResponseBody>, t: Throwable) {
-                loadingDialog!!.dismiss()
                 Log.e("MainActivity", "Error!", t)
                 Toast.makeText(
                     this@MainActivity,
