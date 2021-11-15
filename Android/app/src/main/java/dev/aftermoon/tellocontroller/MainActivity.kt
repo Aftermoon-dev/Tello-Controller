@@ -64,7 +64,6 @@ class MainActivity : AppCompatActivity() {
     private var lastRotateTime: Long = Long.MIN_VALUE
     private var isUpDownMode = false
     private var isCaptureMode = false
-    private var isAlreadySendStableStop = false
 
     /** Loading **/
     private var loadingDialog: LoadingDialog? = null
@@ -135,7 +134,7 @@ class MainActivity : AppCompatActivity() {
                         accelerometerReading,
                         magnetometerReading
                     )
-                    if (isSuccess && !isCaptureMode) {
+                    if (isSuccess && !isCaptureMode && !loadingDialog!!.isShowing) {
                         SensorManager.getOrientation(rotationMatrix, orientationAngles)
 
                         var azi = Math.toDegrees(orientationAngles[0].toDouble()) // -Z
@@ -214,12 +213,9 @@ class MainActivity : AppCompatActivity() {
                                                 startAzi = azi // 새 각도로 변했으므로 새 각도를 startAzi로
                                                 lastRotateTime = System.currentTimeMillis()
                                             }
-                                        } else if (!isAlreadySendStableStop) {
-                                            // 그냥 정지 보내기
-                                            changeFlyingState(20)
-                                            isAlreadySendStableStop = true
                                         }
-                                    } else {
+                                    }
+                                    else {
                                         // 앞으로 기울이면 위로
                                         if (x >= 28) {
                                             move(4, moveDistance)
@@ -228,7 +224,6 @@ class MainActivity : AppCompatActivity() {
                                         else if (x < -50) {
                                             move(5, moveDistance)
                                         }
-
                                     }
                                 }
                             }
@@ -297,17 +292,23 @@ class MainActivity : AppCompatActivity() {
                 viewBinding.btnForcestop.visibility = View.GONE
                 viewBinding.btnStopmode.visibility = View.GONE
                 viewBinding.btnMode.visibility = View.GONE
+                viewBinding.btnCapture.visibility = View.GONE
 
                 changeFlyingState(1)
                 isFlying = false
-                isCaptureMode = false;
+                isCaptureMode = false
                 isUpDownMode = false
+
+                viewBinding.btnStopmode.text = getString(R.string.btn_stop)
+                viewBinding.btnCapture.visibility = View.GONE
+                viewBinding.btnForcestop.visibility = View.VISIBLE
+                viewBinding.btnMode.isEnabled = true
             }
 
 
             Handler(Looper.getMainLooper()).postDelayed({
                 loadingDialog!!.dismiss()
-            }, 3000)
+            }, 6000)
         }
 
         // 비상 버튼
@@ -325,7 +326,7 @@ class MainActivity : AppCompatActivity() {
 
             changeFlyingState(3)
             isFlying = false
-            isCaptureMode = false;
+            isCaptureMode = false
             isUpDownMode = false
         }
 
@@ -345,7 +346,7 @@ class MainActivity : AppCompatActivity() {
             loadingDialog!!.show()
 
             if (isCaptureMode) {
-                changeFlyingState(6)
+                changeFlyingState(6) // Stream Off
                 isCaptureMode = false
                 viewBinding.btnStopmode.text = getString(R.string.btn_stop)
                 viewBinding.btnCapture.visibility = View.GONE
@@ -354,8 +355,8 @@ class MainActivity : AppCompatActivity() {
             } else {
                 startAzi = Double.MIN_VALUE
                 isCaptureMode = true
+                changeFlyingState(5) // Stream On
                 changeFlyingState(21) // 바로 정지
-                changeFlyingState(5)
                 viewBinding.btnStopmode.text = getString(R.string.btn_stop_unlock)
                 viewBinding.btnCapture.visibility = View.VISIBLE
                 viewBinding.btnForcestop.visibility = View.GONE
@@ -385,7 +386,6 @@ class MainActivity : AppCompatActivity() {
         // 강제 정지 버튼
         viewBinding.btnForcestop.setOnClickListener {
             if (isFlying) {
-                isAlreadySendStableStop = false
                 changeFlyingState(21)
             }
         }
@@ -459,8 +459,6 @@ class MainActivity : AppCompatActivity() {
             callResponse = apiCall!!.down(distance)
         }
 
-        isAlreadySendStableStop = false
-
         callResponse!!.enqueue(object : Callback<BaseResponse> {
             override fun onResponse(call: Call<BaseResponse>, response: Response<BaseResponse>) {
                 val body = response.body()
@@ -502,7 +500,7 @@ class MainActivity : AppCompatActivity() {
                         // 성공했으면 사진 저장 시간 고려해서 잠시 Delayed
                         Handler(Looper.getMainLooper()).postDelayed({
                             getCapture()
-                        }, 8000)
+                        }, 10000)
                     }
                 } else {
                     Log.i("MainActivity", "Body NULL")
@@ -612,8 +610,6 @@ class MainActivity : AppCompatActivity() {
             callResponse = apiCall!!.rotate_ccw(angle)
         }
 
-        isAlreadySendStableStop = false
-
         callResponse!!.enqueue(object : Callback<BaseResponse> {
             override fun onResponse(
                 call: Call<BaseResponse>,
@@ -647,7 +643,7 @@ class MainActivity : AppCompatActivity() {
     private fun setSpeed(speed: Int) {
         var callResponse: Call<BaseResponse> = apiCall!!.speed(speed)
 
-        callResponse!!.enqueue(object : Callback<BaseResponse> {
+        callResponse.enqueue(object : Callback<BaseResponse> {
             override fun onResponse(
                 call: Call<BaseResponse>,
                 response: Response<BaseResponse>
