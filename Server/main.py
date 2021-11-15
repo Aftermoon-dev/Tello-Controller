@@ -13,7 +13,7 @@ def cannyEdge(image):
 
 # Face Detection using Face Cascade
 def detectFace(image):
-    cpyImage = image
+    cpyImage = image.copy()
     frame_gray = cv2.cvtColor(cpyImage, cv2.COLOR_BGR2GRAY)
     face_detection = face_cascade.detectMultiScale(frame_gray)
 
