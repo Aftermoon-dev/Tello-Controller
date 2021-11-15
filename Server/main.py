@@ -13,12 +13,13 @@ def cannyEdge(image):
 
 # Face Detection using Face Cascade
 def detectFace(image):
-    frame_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    cpyImage = image
+    frame_gray = cv2.cvtColor(cpyImage, cv2.COLOR_BGR2GRAY)
     face_detection = face_cascade.detectMultiScale(frame_gray)
 
     for x, y, w, h in face_detection:
-        image = cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 3)
-    return image
+        cpyImage = cv2.rectangle(cpyImage, (x, y), (x + w, y + h), (0, 255, 0), 3)
+    return cpyImage
 
 
 def runTello(queue, errorDict):
