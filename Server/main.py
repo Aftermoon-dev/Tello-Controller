@@ -1,12 +1,25 @@
 import multiprocessing
 import os.path
-import time
-
 from djitellopy import Tello
 from flask import Flask, request, jsonify, send_file
 from multiprocessing import Process
 import cv2
-import datetime
+import numpy as np
+face_cascade = cv2.CascadeClassifier('xml/haarcascade_frontalface_default.xml')
+
+# Canny Edge Detection
+def cannyEdge(image):
+    return cv2.Canny(image, 80, 200)
+
+# Face Detection using Face Cascade
+def detectFace(image):
+    frame_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    face_detection = face_cascade.detectMultiScale(frame_gray)
+
+    for x, y, w, h in face_detection:
+        image = cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 3)
+    return image
+
 
 def runTello(queue, errorDict):
     try:
@@ -93,9 +106,9 @@ def runTello(queue, errorDict):
                 elif cmd[0] == 15:
                     if isStreamOn:
                         print('capture!')
-                        frame = telloDrone.get_frame_read()
+                        droneFrame = telloDrone.get_frame_read()
                         print('saved')
-                        cv2.imwrite('./capture/image.png', frame.frame)
+                        cv2.imwrite('./capture/image.png', droneFrame.frame)
                 elif cmd[0] == 16:
                     if isFlying:
                         telloDrone.send_command_without_return("stop")
@@ -391,6 +404,8 @@ def runFlask(queue, errorDict):
         if not errorDict['isError']:
             if os.path.exists('./capture/image.png'):
                 os.remove('./capture/image.png')
+            if os.path.exists('./capture/image_edit.png'):
+                os.remove('./capture/image_edit.png')
 
             queue.append('15;0')
 
@@ -411,7 +426,26 @@ def runFlask(queue, errorDict):
     def getcapture():
         if not errorDict['isError']:
             if os.path.exists('./capture/image.png'):
-                return send_file('./capture/image.png', mimetype='image/png')
+                originalImg = cv2.imread('./capture/image.png')
+
+                print('processing..')
+
+                imgSize = (originalImg.shape[1], originalImg.shape[0])
+
+                edgeImg = cv2.cvtColor(cannyEdge(originalImg), cv2.COLOR_GRAY2BGR)
+                faceImg = detectFace(originalImg)
+
+                print(edgeImg.shape, faceImg.shape)
+
+                originalResize = cv2.resize(originalImg, dsize=(imgSize[0] * 2, imgSize[1] * 2),
+                                            interpolation=cv2.INTER_AREA)
+
+                concatImage = cv2.hconcat([edgeImg, faceImg])
+                concatImage = cv2.vconcat([concatImage, originalResize])
+
+                cv2.imwrite('./capture/image_edit.png', concatImage)
+
+                return send_file('./capture/image_edit.png', mimetype='image/png')
             else:
                 return jsonify(
                     code=500,
